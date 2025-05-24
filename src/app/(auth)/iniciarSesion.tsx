@@ -200,7 +200,7 @@ const IniciarSesion = () => {
           
           <View style={styles.registerContainer}>
             <Text style={{color: colors.placeholder}}>¿No tienes cuenta? </Text>
-            <TouchableOpacity /*onPress={handleRegister}*/>
+            <TouchableOpacity onPress={() => router.push("/(auth)/crearCuenta")}>
               <Text style={{color: colors.primary}}>Regístrate</Text>
             </TouchableOpacity>
           </View>

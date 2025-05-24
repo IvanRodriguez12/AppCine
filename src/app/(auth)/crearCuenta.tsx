@@ -15,13 +15,12 @@ import {
 import { router } from 'expo-router';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
-const CrearCuenta = () => { // Nombre en minúsculas
+const CrearCuenta = () => { 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
 
-  // Mismos colores que en iniciarSesion
   const colors = {
     primary: '#E50914',
     darkBg: '#000000',
@@ -170,7 +169,7 @@ const CrearCuenta = () => { // Nombre en minúsculas
             <View style={[styles.dividerLine, {backgroundColor: colors.divider}]} />
           </View>
           
-          {/* Botones sociales - Misma implementación que en iniciarSesion */}
+          {/* Botones sociales */}
           <View style={styles.socialButtonsContainer}>
             <TouchableOpacity 
               style={[styles.socialButton, {backgroundColor: colors.socialButtonBg}]}
