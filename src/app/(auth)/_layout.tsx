@@ -7,6 +7,7 @@ const AuthStack = () => {
       <Stack.Screen name="index" />
       <Stack.Screen name="inicio" />
       <Stack.Screen name="iniciarSesion" />
+      <Stack.Screen name="crearCuenta" />
     </Stack>
   );
 };

@@ -23,7 +23,11 @@ const Inicio = () => {
         >
           <Text style={styles.buttonText}>Iniciar Sesión</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button}>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => router.push("/(auth)/crearCuenta")}
+          activeOpacity={0.8}
+        >
           <Text style={styles.buttonText}>Crear Cuenta</Text>
         </TouchableOpacity>
       </View>
