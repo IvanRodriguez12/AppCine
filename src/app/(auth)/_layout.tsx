@@ -4,9 +4,11 @@ import React from 'react';
 const AuthStack = () => {
   return (
     <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Index" />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="inicio" />
+      <Stack.Screen name="iniciarSesion" />
     </Stack>
   );
 };
 
-export default AuthStack
+export default AuthStack;
