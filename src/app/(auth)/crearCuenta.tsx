@@ -21,7 +21,6 @@ const CrearCuenta = () => {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
 
-  // Mismos colores que en iniciarSesion
   const colors = {
     primary: '#E50914',
     darkBg: '#000000',
