@@ -1,21 +1,21 @@
+import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  SafeAreaView,
+import {
+  Alert,
   Image,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { router } from 'expo-router';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
-const CrearCuenta = () => { // Nombre en minúsculas
+const CrearCuenta = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,48 +29,34 @@ const CrearCuenta = () => { // Nombre en minúsculas
     inputBg: '#333333',
     placeholder: '#8C8C8C',
     divider: '#404040',
-    socialButtonBg: '#1A1A1A'
   };
 
   const validateEmail = (text: string) => {
     setEmail(text);
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (text && !emailRegex.test(text)) {
-      setEmailError('Ingresa un correo válido');
+      setEmailError('Ingresa un correo válido (ejemplo@dominio.com)');
     } else {
       setEmailError('');
     }
   };
 
   const handleRegister = () => {
-    if (!fullName || !email || !password) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
-    }
-    if (emailError) {
-      Alert.alert('Error', 'Por favor ingresa un correo válido');
-      return;
-    }
-    Alert.alert(
-      'Registro exitoso',
-      `Bienvenido ${fullName}`,
-      //[{ text: 'OK', onPress: () => router.replace('/(tabs)/home') }]
-    );
-  };
+  if (!fullName || !email || !password) {
+    Alert.alert('Error', 'Por favor completa todos los campos');
+    return;
+  }
+  if (emailError) {
+    Alert.alert('Error', 'Por favor ingresa un correo válido');
+    return;
+  }
+  
+  router.replace('./verificarIdentidad');
+};
 
-  const handleGoogleRegister = () => {
-    Alert.alert(
-      'Google Login', 
-      'Integración con Google pendiente'
-    );
-  };
-
-  const handleGmailRegister = () => {
-    Alert.alert(
-      'Gmail Login', 
-      'Integración con Gmail pendiente'
-    );
-  };
+  const handleLoginRedirect = () => {
+  router.push('./iniciarSesion');
+};
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.darkBg}}>
@@ -113,6 +99,7 @@ const CrearCuenta = () => { // Nombre en minúsculas
               value={fullName}
               onChangeText={setFullName}
               autoCapitalize="words"
+              textContentType="name"
             />
             
             <Text style={[styles.label, {color: colors.lightText}]}>Correo electrónico</Text>
@@ -129,8 +116,14 @@ const CrearCuenta = () => { // Nombre en minúsculas
               placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={validateEmail}
+              onBlur={() => {
+                if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                  setEmailError('Formato inválido (ejemplo: usuario@dominio.com)');
+                }
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
+              textContentType="emailAddress"
             />
             {emailError && (
               <Text style={{color: colors.primary, fontSize: moderateScale(12), marginTop: verticalScale(-12), marginBottom: verticalScale(16)}}>
@@ -153,6 +146,7 @@ const CrearCuenta = () => { // Nombre en minúsculas
               value={password}
               onChangeText={setPassword}
               secureTextEntry
+              textContentType="newPassword"
             />
             
             <TouchableOpacity 
@@ -163,43 +157,11 @@ const CrearCuenta = () => { // Nombre en minúsculas
             </TouchableOpacity>
           </View>
           
-          {/* Divisor */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, {backgroundColor: colors.divider}]} />
-            <Text style={[styles.dividerText, {color: colors.placeholder}]}>o</Text>
-            <View style={[styles.dividerLine, {backgroundColor: colors.divider}]} />
-          </View>
-          
-          {/* Botones sociales - Misma implementación que en iniciarSesion */}
-          <View style={styles.socialButtonsContainer}>
-            <TouchableOpacity 
-              style={[styles.socialButton, {backgroundColor: colors.socialButtonBg}]}
-              onPress={handleGoogleRegister}
-            >
-              <Image
-                source={require('../../assets/images/google-logo.png')}
-                style={{
-                  width: moderateScale(24),
-                  height: moderateScale(24),
-                  marginRight: moderateScale(12)
-                }}
-              />
-              <Text style={[styles.socialButtonText, {color: colors.lightText}]}>Registrarse con Google</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.socialButton, {backgroundColor: colors.socialButtonBg}]}
-              onPress={handleGmailRegister}
-            >
-              <Image
-                source={require('../../assets/images/gmail-new.png')}
-                style={{
-                  width: moderateScale(24),
-                  height: moderateScale(24),
-                  marginRight: moderateScale(12)
-                }}
-              />
-              <Text style={[styles.socialButtonText, {color: colors.lightText}]}>Registrarse con Gmail</Text>
+          {/* Enlace para iniciar sesión */}
+          <View style={styles.loginContainer}>
+            <Text style={{color: colors.placeholder}}>¿Ya tienes cuenta? </Text>
+            <TouchableOpacity onPress={handleLoginRedirect}>
+              <Text style={{color: colors.primary}}>Inicia Sesión</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -248,36 +210,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  divider: {
+  loginContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: verticalScale(24),
-    width: '100%'
-  },
-  dividerLine: {
-    flex: 1,
-    height: verticalScale(1),
-  },
-  dividerText: {
-    marginHorizontal: moderateScale(16),
-    fontSize: moderateScale(16),
-  },
-  socialButtonsContainer: {
-    width: '100%',
-    marginBottom: verticalScale(24),
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: moderateScale(1),
-    borderRadius: moderateScale(8),
-    padding: verticalScale(16),
-    marginBottom: verticalScale(12),
-    borderColor: '#404040',
-  },
-  socialButtonText: {
-    fontSize: moderateScale(16),
+    justifyContent: 'center',
+    marginTop: verticalScale(24),
   },
 });
 
-export default CrearCuenta; 
+export default CrearCuenta;
