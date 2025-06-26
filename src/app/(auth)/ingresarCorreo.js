@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const IngresarCorreo = () => {
@@ -31,32 +32,45 @@ const IngresarCorreo = () => {
   };
 
   const validateEmail = (text) => {
-    setEmail(text);
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (text && !emailRegex.test(text)) {
-      setEmailError('Formato inválido (ejemplo: usuario@dominio.com)');
-    } else {
-      setEmailError('');
-    }
-  };
+  setEmail(text);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (text && !emailRegex.test(text)) {
+    setEmailError('Formato inválido (ejemplo: usuario@dominio.com)');
+  } else {
+    setEmailError('');
+  }
+};
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!email) {
       setEmailError('Por favor ingresa tu correo electrónico');
       return;
     }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.com$/;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setEmailError('Correo electrónico inválido');
       return;
     }
-    
-    // Si el correo es válido, navegar a la pantalla de verificación
-    router.push({
-      pathname: '/verificarCorreo',
-      params: { email: email }
-    });
+
+    try {
+      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
+      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+
+      const existe = usuarios.find((u) => u.email === email);
+      if (!existe) {
+        Alert.alert('Error', 'Este correo no está registrado');
+        return;
+      }
+
+      router.push({
+        pathname: '/reestablecerContrasena',
+        params: { email }
+      });
+    } catch (error) {
+      console.error('Error al buscar usuario:', error);
+      Alert.alert('Error', 'No se pudo verificar el correo');
+    }
   };
 
   return (

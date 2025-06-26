@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const CrearCuenta = () => {
@@ -40,22 +41,42 @@ const CrearCuenta = () => {
     }
   };
 
-  const handleRegister = () => {
-  if (!fullName || !email || !password) {
-    Alert.alert('Error', 'Por favor completa todos los campos');
-    return;
-  }
-  if (emailError) {
-    Alert.alert('Error', 'Por favor ingresa un correo válido');
-    return;
-  }
-  
-  router.replace('./verificarIdentidad');
-};
+  const handleRegister = async () => {
+    if (!fullName || !email || !password) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
+    }
+    if (emailError) {
+      Alert.alert('Error', 'Por favor ingresa un correo válido');
+      return;
+    }
+
+    try {
+      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
+      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+
+      const existe = usuarios.find((u: any) => u.email === email);
+      if (existe) {
+        Alert.alert('Error', 'Este correo ya está registrado');
+        return;
+      }
+
+      const nuevoUsuario = { fullName, email, password };
+      usuarios.push(nuevoUsuario);
+      await AsyncStorage.setItem('usuarios', JSON.stringify(usuarios));
+
+      Alert.alert('Éxito', 'Cuenta creada correctamente');
+      router.replace('./verificarIdentidad');
+
+    } catch (error) {
+      console.error('Error al registrar:', error);
+      Alert.alert('Error', 'Ocurrió un error al registrar el usuario');
+    }
+  };
 
   const handleLoginRedirect = () => {
-  router.push('./iniciarSesion');
-};
+    router.push('./iniciarSesion');
+  };
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.darkBg}}>
@@ -67,7 +88,6 @@ const CrearCuenta = () => {
           contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo */}
           <Image 
             source={require('../../assets/images/icon.png')} 
             style={{
@@ -77,11 +97,7 @@ const CrearCuenta = () => {
               marginBottom: verticalScale(20)
             }}
           />
-          
-          {/* Título */}
           <Text style={[styles.title, {color: colors.lightText}]}>Crear Cuenta</Text>
-          
-          {/* Formulario */}
           <View style={styles.formContainer}>
             <Text style={[styles.label, {color: colors.lightText}]}>Nombre completo</Text>
             <TextInput
@@ -100,7 +116,6 @@ const CrearCuenta = () => {
               autoCapitalize="words"
               textContentType="name"
             />
-            
             <Text style={[styles.label, {color: colors.lightText}]}>Correo electrónico</Text>
             <TextInput
               style={[
@@ -129,7 +144,6 @@ const CrearCuenta = () => {
                 {emailError}
               </Text>
             )}
-            
             <Text style={[styles.label, {color: colors.lightText}]}>Contraseña</Text>
             <TextInput
               style={[
@@ -147,7 +161,6 @@ const CrearCuenta = () => {
               secureTextEntry
               textContentType="newPassword"
             />
-            
             <TouchableOpacity 
               style={[styles.registerButton, {backgroundColor: colors.primary}]}
               onPress={handleRegister}
@@ -155,8 +168,6 @@ const CrearCuenta = () => {
               <Text style={styles.buttonText}>Crear Cuenta</Text>
             </TouchableOpacity>
           </View>
-          
-          {/* Enlace para iniciar sesión */}
           <View style={styles.loginContainer}>
             <Text style={{color: colors.placeholder}}>¿Ya tienes cuenta? </Text>
             <TouchableOpacity onPress={handleLoginRedirect}>

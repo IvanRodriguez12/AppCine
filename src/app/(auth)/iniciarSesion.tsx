@@ -13,13 +13,13 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const IniciarSesion = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
-
 
   const colors = {
     primary: '#E50914',
@@ -42,25 +42,38 @@ const IniciarSesion = () => {
     }
   };
 
-  const handleLogin = () => {
-  if (!email || !password) {
-    Alert.alert('Error', 'Por favor completa todos los campos');
-    return;
-  }
-  if (emailError) {
-    Alert.alert('Error', 'Por favor ingresa un correo válido');
-    return;
-  }
-  
-  router.replace('./mensajeBienvenida');
-};
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
+    }
+    if (emailError) {
+      Alert.alert('Error', 'Por favor ingresa un correo válido');
+      return;
+    }
+
+    try {
+      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
+      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+
+      const usuario = usuarios.find((u: any) => u.email === email && u.password === password);
+      if (usuario) {
+      await AsyncStorage.setItem('usuarioActual', JSON.stringify(usuario.email));
+      router.replace('./mensajeBienvenida');
+    } else {
+    Alert.alert('Error', 'Correo o contraseña incorrectos');
+    }
+    } catch (error) {
+      console.error('Error al iniciar sesión:', error);
+      Alert.alert('Error', 'Ocurrió un error al intentar iniciar sesión');
+    }
+  };
 
   const handleForgotPassword = () => {
-  router.push('./ingresarCorreo');
-};
+    router.push('./ingresarCorreo');
+  };
 
-  
-  const handleRegister = () => router.push('/crearCuenta');
+  const handleRegister = () => router.push('./crearCuenta');
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.darkBg}}>

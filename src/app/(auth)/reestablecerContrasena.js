@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -13,9 +13,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const ReestablecerContrasena = () => {
+  const { email } = useLocalSearchParams(); // 📌 Email pasado por params
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordErrors, setPasswordErrors] = useState({
@@ -38,44 +40,60 @@ const ReestablecerContrasena = () => {
 
   const validatePassword = (text) => {
     setPassword(text);
-    
     const errors = {
       length: text.length < 8,
       uppercase: !/[A-Z]/.test(text),
       number: !/\d/.test(text),
       special: !/[!@#$%^&*(),.?":{}|<>]/.test(text)
     };
-    
     setPasswordErrors(errors);
   };
 
-  const handleContinue = () => {
-    // Verificar que la contraseña cumpla todos los requisitos
-    const hasErrors = Object.values(passwordErrors).some(error => error);
-    
+  const handleContinue = async () => {
+    const hasErrors = Object.values(passwordErrors).some((e) => e);
+
     if (!password || !confirmPassword) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
-    
+
     if (hasErrors) {
       Alert.alert('Error', 'La contraseña no cumple con todos los requisitos');
       return;
     }
-    
+
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Las contraseñas no coinciden');
       return;
     }
-    
-    // Navegar a la pantalla de verificación de identidad
-    router.push('/verificarIdentidad');
+
+    try {
+      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
+      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+
+      const index = usuarios.findIndex((u) => u.email === email);
+      if (index === -1) {
+        Alert.alert('Error', 'No se encontró el usuario');
+        return;
+      }
+
+      usuarios[index].password = password;
+      await AsyncStorage.setItem('usuarios', JSON.stringify(usuarios));
+
+      Alert.alert('Éxito', 'Contraseña actualizada correctamente');
+      router.replace('/(auth)/iniciarSesion');
+
+    } catch (error) {
+      console.error('Error al actualizar contraseña:', error);
+      Alert.alert('Error', 'No se pudo actualizar la contraseña');
+    }
   };
 
   const getRequirementStyle = (isError) => ({
-    ...styles.requirementText,
-    color: isError ? colors.primary : '#4CAF50'
-  });
+  fontSize: 14,
+  marginBottom: 4,
+  color: isError ? '#E50914' : '#4CAF50'
+});
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.darkBg}}>

@@ -2,22 +2,28 @@ import imagePath from "@/src/constants/imagePath";
 import { router } from "expo-router";
 import React, { useEffect, useState, useCallback } from 'react';
 import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const Auth = () => {
     const [isLoading, setIsLoading] = useState(false);
 
-    let navigateToInicio = () => {
-        router.push("/(auth)/inicio");
-    };
-
-    let loadingTimeout = useCallback(() => {
+    const loadingTimeout = useCallback(async () => {
         setIsLoading(true);
-        setTimeout(navigateToInicio, 2000);
+
+        const usuarioActual = await AsyncStorage.getItem('usuarioActual');
+
+        setTimeout(() => {
+            if (usuarioActual) {
+                router.replace("/menu/menuPrincipal");
+            } else {
+                router.replace("/(auth)/inicio");
+            }
+        }, 1500);
     }, []);
 
     useEffect(() => {
-        setTimeout(loadingTimeout, 2000);
+        loadingTimeout();
     }, [loadingTimeout]);
 
     return (
