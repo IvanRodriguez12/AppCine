@@ -45,7 +45,7 @@ const MenuPrincipal = () => {
         </View>
 
         <TouchableOpacity style={styles.cartIcon}>
-          <FontAwesome5 name="shopping-cart" size={20} color="white" />
+          <FontAwesome5 name="shopping-cart" size={25} color="white" />
         </TouchableOpacity>
       </View>
 
@@ -61,9 +61,9 @@ const MenuPrincipal = () => {
           }}
         >
           {[1, 2, 3, 4, 5].map((num) => (
-            <View key={num} style={styles.carouselItem}>
+            <TouchableOpacity key={num} style={styles.carouselItem}>
               <Text style={styles.carouselText}>PELICULA {num}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
         <View style={styles.dots}>
@@ -133,34 +133,37 @@ const styles = StyleSheet.create({
   menuPrincipalBtn: {
     flex: 1,
     backgroundColor: 'red',
-    borderRadius: moderateScale(6),
-    paddingVertical: verticalScale(10),
+    borderRadius: moderateScale(8),
+    paddingVertical: verticalScale(12),
     alignItems: 'center',
+    height: moderateScale(64),
   },
   menuPrincipalText: {
     fontWeight: 'bold',
     color: 'white',
+    fontSize: moderateScale(18),
   },
   cartIcon: {
     backgroundColor: 'red',
-    padding: moderateScale(10),
-    borderRadius: moderateScale(6),
+    padding: moderateScale(18),
+    borderRadius: moderateScale(8),
   },
   carouselContainer: {
     marginBottom: verticalScale(20),
   },
   carouselItem: {
     width: anchoPantalla - moderateScale(32),
-    height: verticalScale(100),
+    height: verticalScale(160),
     backgroundColor: '#4a4a4a',
-    borderRadius: moderateScale(10),
+    borderRadius: moderateScale(12),
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: moderateScale(8),
+    marginHorizontal: moderateScale(0.4),
   },
   carouselText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: moderateScale(20),
   },
   dots: {
     flexDirection: 'row',
@@ -185,29 +188,30 @@ const styles = StyleSheet.create({
   sectionBox: {
     width: '48%',
     backgroundColor: '#4a4a4a',
-    borderRadius: moderateScale(10),
+    borderRadius: moderateScale(12),
     alignItems: 'center',
-    padding: moderateScale(12),
+    padding: moderateScale(16),
   },
   sectionText: {
     color: 'white',
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(13),
     textAlign: 'center',
     marginTop: verticalScale(6),
   },
   sectionTitle: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: moderateScale(16),
   },
   sectionFull: {
     backgroundColor: '#4a4a4a',
-    borderRadius: moderateScale(10),
-    padding: moderateScale(14),
-    marginBottom: verticalScale(12),
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
+    marginBottom: verticalScale(14),
   },
   sectionSubText: {
     color: '#ccc',
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(13),
     marginTop: verticalScale(4),
   },
 });
