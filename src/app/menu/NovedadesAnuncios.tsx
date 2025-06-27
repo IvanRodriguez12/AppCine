@@ -8,10 +8,10 @@ import {
   Image,
   BackHandler,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import Header from '@/src/components/Header';
 
 interface NewsItem {
   id: number;
@@ -26,20 +26,16 @@ const NovedadesAnuncios: React.FC = () => {
   const router = useRouter();
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
-  // Manejar el botón de atrás del hardware
   useEffect(() => {
     const backAction = () => {
       if (selectedNews) {
-        // Si estamos viendo una noticia, volver a la lista
         setSelectedNews(null);
-        return true; // Prevenir el comportamiento por defecto
+        return true;
       }
-      // Si estamos en la lista, permitir el comportamiento por defecto (volver al menú)
       return false;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-
     return () => backHandler.remove();
   }, [selectedNews]);
 
@@ -95,29 +91,22 @@ El estreno está programado para julio de 2026 en formato IMAX.`,
     }
   };
 
-  if (selectedNews) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => setSelectedNews(null)}
-          >
-            <Ionicons name="arrow-back" size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.title}>CineApp</Text>
-          <Image
-            source={require('../../assets/images/adaptive-icon.png')}
-            style={styles.logo}
-          />
-        </View>
+  return (
+    <SafeAreaView style={styles.container}>
+      <Header
+        title="CineApp"
+        onBack={() => {
+          selectedNews ? setSelectedNews(null) : router.back();
+        }}
+      />
 
+      {selectedNews ? (
         <ScrollView style={styles.content}>
           <Text style={styles.newsTitle}>{selectedNews.title}</Text>
-          <Text style={styles.newsDate}>{selectedNews.date} | {selectedNews.category}</Text>
-          
-          {/* Área para imagen */}
+          <Text style={styles.newsDate}>
+            {selectedNews.date} | {selectedNews.category}
+          </Text>
+
           <View style={styles.imageContainer}>
             <Image
               source={getNewsImage(selectedNews.id)}
@@ -128,43 +117,24 @@ El estreno está programado para julio de 2026 en formato IMAX.`,
 
           <Text style={styles.newsContent}>{selectedNews.content}</Text>
         </ScrollView>
-      </SafeAreaView>
-    );
-  }
+      ) : (
+        <ScrollView style={styles.content}>
+          <Text style={styles.sectionTitle}>NOVEDADES/</Text>
+          <Text style={styles.sectionTitle}>ANUNCIOS</Text>
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={28} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.title}>CineApp</Text>
-        <Image
-          source={require('../../assets/images/adaptive-icon.png')}
-          style={styles.logo}
-        />
-      </View>
-
-      <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>NOVEDADES/</Text>
-        <Text style={styles.sectionTitle}>ANUNCIOS</Text>
-
-        {newsData.map((news) => (
-          <TouchableOpacity 
-            key={news.id}
-            style={styles.newsCard}
-            onPress={() => setSelectedNews(news)}
-          >
-            <Text style={styles.cardTitle}>{news.title}</Text>
-            <Text style={styles.cardSubtitle}>{news.subtitle}</Text>
-            <Text style={styles.cardDate}>{news.date}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+          {newsData.map((news) => (
+            <TouchableOpacity
+              key={news.id}
+              style={styles.newsCard}
+              onPress={() => setSelectedNews(news)}
+            >
+              <Text style={styles.cardTitle}>{news.title}</Text>
+              <Text style={styles.cardSubtitle}>{news.subtitle}</Text>
+              <Text style={styles.cardDate}>{news.date}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -174,27 +144,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'black',
     paddingHorizontal: moderateScale(16),
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: verticalScale(20),
-    marginBottom: verticalScale(20),
-  },
-  backButton: {
-    padding: moderateScale(4),
-  },
-  title: {
-    fontSize: moderateScale(22),
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  logo: {
-    width: moderateScale(80),
-    height: moderateScale(80),
-    resizeMode: 'contain',
-    borderRadius: moderateScale(8),
   },
   content: {
     flex: 1,
@@ -227,7 +176,6 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: moderateScale(12),
   },
-  // Estilos para la vista de detalle
   newsTitle: {
     fontSize: moderateScale(24),
     color: 'white',
@@ -256,27 +204,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(15),
     lineHeight: moderateScale(22),
     marginBottom: verticalScale(24),
-  },
-  relatedSection: {
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-    paddingTop: verticalScale(16),
-    marginBottom: verticalScale(24),
-  },
-  relatedTitle: {
-    color: 'white',
-    fontSize: moderateScale(18),
-    fontWeight: 'bold',
-    marginBottom: verticalScale(12),
-  },
-  relatedItem: {
-    backgroundColor: '#333',
-    borderRadius: moderateScale(8),
-    padding: moderateScale(12),
-  },
-  relatedText: {
-    color: '#ccc',
-    fontSize: moderateScale(14),
   },
 });
 

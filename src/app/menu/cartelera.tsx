@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { moderateScale, verticalScale } from 'react-native-size-matters';
+import Header from '@/src/components/Header';
 
 const TMDB_API_URL = `https://api.themoviedb.org/3/movie/now_playing?language=es-AR&page=1&api_key=${TMDB_API_KEY}`;
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
@@ -57,13 +59,12 @@ const CarteleraPage: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Image source={require('../../assets/images/adaptive-icon.png')} style={styles.logo} />
-        <Text style={styles.appName}>CineApp</Text>
-      </View>
+      <Header
+        title="CineApp"
+        onBack={() => {
+          router.back();
+        }}
+      />
 
       <View style={styles.navButtons}>
         <TouchableOpacity style={styles.activeNavButton}>
@@ -107,40 +108,16 @@ const cardWidth = (width - 48) / 2;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
-    paddingTop: 40
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 10
-  },
-  backButton: {
-    marginRight: 10
-  },
-  backText: {
-    fontSize: 24,
-    color: '#fff'
-  },
-  logo: {
-    width: 32,
-    height: 32,
-    marginRight: 8,
-    borderRadius: 6
-  },
-  appName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff'
+    backgroundColor: 'black',
+    paddingHorizontal: moderateScale(10),
   },
   navButtons: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    marginBottom: 10
+    marginBottom: 20,
   },
   activeNavButton: {
-    backgroundColor: '#8B0000',
+    backgroundColor: 'red',
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 20
@@ -150,13 +127,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold'
   },
   inactiveNavButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#4a4a4a',
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 20
   },
   inactiveNavText: {
-    color: '#aaa'
+    color: '#fff'
   },
   scrollContainer: {
     paddingHorizontal: 12,
