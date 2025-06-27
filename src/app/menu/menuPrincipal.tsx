@@ -16,10 +16,14 @@ import MenuLateral from '@/src/components/menuLateral';
 
 const anchoPantalla = Dimensions.get('window').width;
 
-const MenuPrincipal = () => {
+const MenuPrincipal: React.FC = () => {
   const router = useRouter();
-  const [indexSlide, setIndexSlide] = useState(0);
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [indexSlide, setIndexSlide] = useState<number>(0);
+  const [menuVisible, setMenuVisible] = useState<boolean>(false);
+
+  const handleNovedadesPress = (): void => {
+  router.navigate('/menu/NovedadesAnuncios');
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -89,7 +93,7 @@ const MenuPrincipal = () => {
         <Text style={styles.sectionSubText}>Accede a diferentes promociones y más</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.sectionFull}>
+      <TouchableOpacity style={styles.sectionFull} onPress={handleNovedadesPress}>
         <Text style={styles.sectionTitle}>NOVEDADES / ANUNCIOS</Text>
         <Text style={styles.sectionSubText}>Últimas noticias y promociones</Text>
       </TouchableOpacity>

@@ -19,13 +19,17 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { moderateScale, verticalScale, scale } from 'react-native-size-matters';
+import ConfirmLogout from './ConfirmLogout';
+import SessionClosed from './SessionClosed';
 
 const { width, height } = Dimensions.get('window');
 
 const MenuLateral = ({ onClose }: { onClose: () => void }) => {
   const router = useRouter();
   const [nombre, setNombre] = useState('Usuario');
-  const [correo, setCorreo] = useState('correo@ejemplo.com');
+  const [correo, setCorreo] = useState('correo@gmail.com');
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+  const [showSessionClosed, setShowSessionClosed] = useState(false);
   const slideAnim = useRef(new Animated.Value(-width * 0.75)).current;
 
   useEffect(() => {
@@ -45,49 +49,81 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
     }).start();
   }, []);
 
-  const cerrarSesion = async () => {
+  const handleLogoutPress = () => {
+    setShowConfirmLogout(true);
+  };
+
+  const handleConfirmLogout = async () => {
+    setShowConfirmLogout(false);
     await AsyncStorage.removeItem('usuarioActual');
+    setShowSessionClosed(true);
+  };
+
+  const handleCancelLogout = () => {
+    setShowConfirmLogout(false);
+  };
+
+  const handleSessionClosedComplete = () => {
+    setShowSessionClosed(false);
+    onClose();
     router.replace('/(auth)/inicio');
   };
 
   return (
-    <SafeAreaView style={styles.overlay}>
-      <TouchableOpacity style={styles.backdrop} onPress={onClose} />
+    <>
+      <SafeAreaView style={styles.overlay}>
+        <TouchableOpacity style={styles.backdrop} onPress={onClose} />
 
-      <Animated.View style={[styles.menu, { transform: [{ translateX: slideAnim }] }]}>
-        <View style={styles.userSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {nombre.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-            </Text>
+        <Animated.View style={[styles.menu, { transform: [{ translateX: slideAnim }] }]}>
+          <View style={styles.userSection}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {nombre.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.userName}>{nombre}</Text>
+              <Text style={styles.userEmail}>{correo}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.userName}>{nombre}</Text>
-            <Text style={styles.userEmail}>{correo}</Text>
-          </View>
-        </View>
 
-        <MenuItem icon="percent" text="Cupones" />
-        <MenuItem icon="shopping-bag" text="Mis Compras" />
-        <MenuItem icon="location-pin" text="Ubicación" library="Entypo" />
-        <MenuItem icon="checkcircleo" text="Mis Reviews" library="AntDesign" />
-        <MenuItem icon="heart" text="Mis Favoritos" library="AntDesign" />
-        <MenuItem icon="star" text="Calificar" library="AntDesign" />
+          <MenuItem icon="percent" text="Cupones" />
+          <MenuItem icon="shopping-bag" text="Mis Compras" />
+          <MenuItem icon="location-pin" text="Ubicación" library="Entypo" />
+          <MenuItem icon="checkcircleo" text="Mis Reviews" library="AntDesign" />
+          <MenuItem icon="heart" text="Mis Favoritos" library="AntDesign" />
+          <MenuItem icon="star" text="Calificar" library="AntDesign" />
 
-        <View style={styles.separator} />
+          <View style={styles.separator} />
 
-        <MenuItem icon="info" text="Sobre Nosotros" library="Feather" />
-        <MenuItem icon="person" text="Mi Cuenta" library="Ionicons" />
-        <MenuItem icon="settings" text="Configuración" library="Feather" />
+          <MenuItem icon="info" text="Sobre Nosotros" library="Feather" />
+          <MenuItem icon="person" text="Mi Cuenta" library="Ionicons" />
+          <MenuItem icon="settings" text="Configuración" library="Feather" />
 
-        <TouchableOpacity style={styles.logoutButton} onPress={cerrarSesion}>
-          <View style={styles.menuItem}>
-            <AntDesign name="logout" size={scale(20)} color="red" />
-            <Text style={styles.logoutText}>Cerrar Sesión</Text>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    </SafeAreaView>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogoutPress}>
+            <View style={styles.menuItem}>
+              <AntDesign name="logout" size={scale(20)} color="red" />
+              <Text style={styles.logoutText}>Cerrar Sesión</Text>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      </SafeAreaView>
+
+      {/* Modal de confirmación de cierre de sesión */}
+      <ConfirmLogout
+        visible={showConfirmLogout}
+        onConfirm={handleConfirmLogout}
+        onCancel={handleCancelLogout}
+        userName={nombre}
+        userEmail={correo}
+      />
+
+      {/* Modal de sesión cerrada */}
+      <SessionClosed
+        visible={showSessionClosed}
+        onComplete={handleSessionClosedComplete}
+      />
+    </>
   );
 };
 

@@ -14,7 +14,7 @@ const AuthStack = () => {
       <Stack.Screen name="verificarIdentidad" />
       <Stack.Screen name="Scan" />
       <Stack.Screen name="mensajeBienvenida" />
-
+      <Stack.Screen name="NovedadesAnuncios" />
     </Stack>
   );
 };
