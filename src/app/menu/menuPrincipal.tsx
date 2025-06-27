@@ -1,18 +1,18 @@
+import MenuLateral from '@/src/components/menuLateral';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   Dimensions,
   Image,
   SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
-import MenuLateral from '@/src/components/menuLateral';
 
 const anchoPantalla = Dimensions.get('window').width;
 
@@ -79,9 +79,10 @@ const MenuPrincipal: React.FC = () => {
 
       {/* Secciones */}
       <View style={styles.sectionRow}>
-        <TouchableOpacity style={styles.sectionBox}>
+        <TouchableOpacity style={styles.sectionBox} 
+        onPress={() => router.push('/menu/cartelera')}>
           <Ionicons name="play-circle" size={36} color="white" />
-          <Text style={styles.sectionText}>Estrenos / Próximamente</Text>
+          <Text style={styles.sectionText}>Cartelera</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.sectionBox}>
           <Text style={styles.sectionTitle}>CANDY SHOP</Text>

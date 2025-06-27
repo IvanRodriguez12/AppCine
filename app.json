@@ -36,7 +36,10 @@
       ],
       "expo-font"
     ],
-    "experiments": {
+    "experimental": {
+      "router": {
+        "appDir": "src"
+      },
       "typedRoutes": true
     }
   }
