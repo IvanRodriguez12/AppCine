@@ -89,9 +89,9 @@ const MenuPrincipal: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.sectionFull}>
-        <Text style={styles.sectionTitle}>SUSCRIPCIÓN</Text>
-        <Text style={styles.sectionSubText}>Accede a diferentes promociones y más</Text>
+      <TouchableOpacity style={styles.sectionFull} onPress={() => router.push('/menu/Suscripcion')}>
+          <Text style={styles.sectionTitle}>SUSCRIPCIÓN</Text>
+          <Text style={styles.sectionSubText}>Accede a diferentes promociones y más</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.sectionFull} onPress={handleNovedadesPress}>
