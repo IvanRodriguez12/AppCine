@@ -32,7 +32,7 @@ const MenuPrincipal: React.FC = () => {
         <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
           <Ionicons name="menu" size={28} color="white" />
         </TouchableOpacity>
-        <Text style={styles.title}>APPCINE</Text>
+        <Text style={styles.title}>CineApp</Text>
         <Image
           source={require('../../assets/images/adaptive-icon.png')}
           style={styles.logo}

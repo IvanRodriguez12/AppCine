@@ -64,9 +64,9 @@ La ceremonia de apertura contará con estrellas internacionales y promete un eve
       subtitle: 'Promoción especial para suscriptores',
       content: `¡Oferta especial para nuestros suscriptores! Durante todo el mes de Julio podrás disfrutar de 2x1 en palomitas medianas y grandes.
 
-Esta promoción es válida únicamente para miembros del programa de suscripción AppCine Premium.
+Esta promoción es válida únicamente para miembros del programa de suscripción CineApp Premium.
 
-Realiza tu compra desde la AppCine con tu cuenta, o presenta tu cuenta de suscriptor en la dulcería y disfruta de esta increíble oferta.`,
+Realiza tu compra desde la CineApp con tu cuenta, o presenta tu cuenta de suscriptor en la dulcería y disfruta de esta increíble oferta.`,
     },
     {
       id: 3,
@@ -106,7 +106,7 @@ El estreno está programado para julio de 2026 en formato IMAX.`,
           >
             <Ionicons name="arrow-back" size={28} color="white" />
           </TouchableOpacity>
-          <Text style={styles.title}>APPCINE</Text>
+          <Text style={styles.title}>CineApp</Text>
           <Image
             source={require('../../assets/images/adaptive-icon.png')}
             style={styles.logo}
@@ -142,7 +142,7 @@ El estreno está programado para julio de 2026 en formato IMAX.`,
         >
           <Ionicons name="arrow-back" size={28} color="white" />
         </TouchableOpacity>
-        <Text style={styles.title}>APPCINE</Text>
+        <Text style={styles.title}>CineApp</Text>
         <Image
           source={require('../../assets/images/adaptive-icon.png')}
           style={styles.logo}

@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
-  Animated
+  Animated,
+  Modal,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -30,7 +33,12 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
   const [correo, setCorreo] = useState('correo@gmail.com');
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
   const [showSessionClosed, setShowSessionClosed] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showThanksModal, setShowThanksModal] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [thanksMessage, setThanksMessage] = useState('');
   const slideAnim = useRef(new Animated.Value(-width * 0.75)).current;
+  const thanksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -48,6 +56,31 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
       useNativeDriver: true
     }).start();
   }, []);
+
+  // Efecto para manejar el auto-cierre del modal de agradecimiento
+useEffect(() => {
+  if (showThanksModal) {
+    // Configurar el timer para cerrar después de 3 segundos
+    thanksTimerRef.current = setTimeout(() => {
+      handleThanksClose();
+    }, 3000);
+  } else {
+    // Limpiar el timer si el modal no está visible
+    if (thanksTimerRef.current) {
+      clearTimeout(thanksTimerRef.current);
+      thanksTimerRef.current = null;
+    }
+  }
+
+  // Cleanup function para limpiar el timer cuando el componente se desmonte
+  return () => {
+    if (thanksTimerRef.current) {
+      clearTimeout(thanksTimerRef.current);
+      thanksTimerRef.current = null;
+    }
+  };
+}, [showThanksModal]);
+
 
   const handleLogoutPress = () => {
     setShowConfirmLogout(true);
@@ -68,6 +101,108 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
     onClose();
     router.replace('/(auth)/inicio');
   };
+
+  const handleRatingPress = () => {
+    setShowRatingModal(true);
+  };
+
+  const handleStarPress = (star: number) => {
+    setRating(star);
+  };
+
+  const handleRatingSubmit = () => {
+    if (rating === 0) {
+      Alert.alert('Error', 'Por favor selecciona una calificación');
+      return;
+    }
+    setShowRatingModal(false);
+    setThanksMessage('¡Gracias por calificarnos!');
+    setShowThanksModal(true);
+  };
+
+  const handleThanksClose = () => {
+    setShowThanksModal(false);
+    setRating(0);
+    // Limpiar el timer si se cierra manualmente
+    if (thanksTimerRef.current) {
+      clearTimeout(thanksTimerRef.current);
+      thanksTimerRef.current = null;
+    }
+  };
+
+  const RatingModal = () => (
+    <Modal
+      visible={showRatingModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowRatingModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Ionicons name="star" size={40} color="#FFD700" />
+            <Text style={styles.modalTitle}>¿Te gusta CineApp?</Text>
+            <Text style={styles.modalSubtitle}>Califica tu experiencia con la app</Text>
+          </View>
+
+          <View style={styles.starsContainer}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                onPress={() => handleStarPress(star)}
+                style={styles.starButton}
+              >
+                <Ionicons
+                  name={star <= rating ? "star" : "star-outline"}
+                  size={40}
+                  color={star <= rating ? "#FFD700" : "#666"}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={() => setShowRatingModal(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.submitButton]}
+              onPress={handleRatingSubmit}
+            >
+              <Text style={styles.submitButtonText}>Enviar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const ThanksModal = () => (
+    <Modal
+      visible={showThanksModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={handleThanksClose}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={handleThanksClose}
+      >
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Ionicons name="checkmark-circle" size={60} color="#4CAF50" />
+            <Text style={styles.modalTitle}>{thanksMessage}</Text>
+            <Text style={styles.modalSubtitle}>Tu opinión es muy importante para nosotros</Text>
+            <Text style={styles.autoCloseText}>Se cerrará automáticamente en 3 segundos</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   return (
     <>
@@ -92,7 +227,12 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
           <MenuItem icon="location-pin" text="Ubicación" library="Entypo" />
           <MenuItem icon="checkcircleo" text="Mis Reviews" library="AntDesign" />
           <MenuItem icon="heart" text="Mis Favoritos" library="AntDesign" />
-          <MenuItem icon="star" text="Calificar" library="AntDesign" />
+          
+          {/* Sección de calificación */}
+          <TouchableOpacity style={styles.menuItem} onPress={handleRatingPress}>
+            <AntDesign name="star" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Calificar en Estrellas</Text>
+          </TouchableOpacity>
 
           <View style={styles.separator} />
 
@@ -108,6 +248,10 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
           </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
+
+      {/* Modales */}
+      <RatingModal />
+      <ThanksModal />
 
       {/* Modal de confirmación de cierre de sesión */}
       <ConfirmLogout
@@ -221,6 +365,103 @@ const styles = StyleSheet.create({
     marginLeft: scale(15),
     fontWeight: 'bold',
     fontSize: moderateScale(16)
+  },
+  // Estilos para los modales
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(20)
+  },
+  keyboardContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%'
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: moderateScale(20),
+    padding: moderateScale(25),
+    width: '90%',
+    maxWidth: moderateScale(400),
+    alignItems: 'center'
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: verticalScale(25)
+  },
+  modalTitle: {
+    fontSize: moderateScale(22),
+    fontWeight: 'bold',
+    color: 'white',
+    marginTop: verticalScale(10),
+    textAlign: 'center'
+  },
+  modalSubtitle: {
+    fontSize: moderateScale(14),
+    color: '#ccc',
+    marginTop: verticalScale(5),
+    textAlign: 'center'
+  },
+  autoCloseText: {
+    fontSize: moderateScale(12),
+    color: '#999',
+    marginTop: verticalScale(10),
+    textAlign: 'center',
+    fontStyle: 'italic'
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: verticalScale(25)
+  },
+  starButton: {
+    marginHorizontal: moderateScale(5)
+  },
+  commentContainer: {
+    width: '100%',
+    marginBottom: verticalScale(25)
+  },
+  commentInput: {
+    backgroundColor: '#333',
+    borderRadius: moderateScale(10),
+    padding: moderateScale(15),
+    color: 'white',
+    fontSize: moderateScale(16),
+    minHeight: verticalScale(100),
+    textAlignVertical: 'top'
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%'
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: moderateScale(20),
+    borderRadius: moderateScale(10),
+    marginHorizontal: moderateScale(5)
+  },
+  cancelButton: {
+    backgroundColor: '#444'
+  },
+  submitButton: {
+    backgroundColor: 'red' // Cambiado a rojo para mantener consistencia con la app
+  },
+  cancelButtonText: {
+    color: 'white',
+    fontSize: moderateScale(16),
+    fontWeight: 'bold',
+    textAlign: 'center'
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: moderateScale(16),
+    fontWeight: 'bold',
+    textAlign: 'center'
   }
 });
 
