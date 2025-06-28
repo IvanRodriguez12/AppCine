@@ -1,14 +1,17 @@
 import Header from '@/components/Header';
 import { TMDB_API_KEY } from '@env';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  View
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface Genre {
@@ -37,6 +40,7 @@ const PeliculaSeleccionada = () => {
   const [pelicula, setPelicula] = useState<Pelicula | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [favorito, setFavorito] = useState(false);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -59,6 +63,10 @@ const PeliculaSeleccionada = () => {
     if (id) fetchDetails();
   }, [id]);
 
+  const hoy = new Date();
+  const estreno = pelicula ? new Date(pelicula.release_date) : hoy;
+  const esProximamente = estreno > hoy;
+
   if (loading || !pelicula) {
     return (
       <View style={styles.loader}>
@@ -68,7 +76,8 @@ const PeliculaSeleccionada = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="black" />
       <Header
         title="CineApp"
         onBack={() => {
@@ -76,92 +85,119 @@ const PeliculaSeleccionada = () => {
         }}
       />
 
-      <View style={styles.posterWrapper}>
-        <Image
-          source={{ uri: `https://image.tmdb.org/t/p/w500${pelicula.poster_path}` }}
-          style={styles.poster}
-        />
-      </View>
+      <ScrollView style={styles.container}>
+        <View style={styles.posterWrapper}>
+          <Image
+            source={{ uri: `https://image.tmdb.org/t/p/w500${pelicula.poster_path}` }}
+            style={styles.poster}
+          />
 
-      <Text style={styles.title}>{pelicula.title} ★★★★★</Text>
-      <Text style={styles.subinfo}>
-        {pelicula.release_date?.split('-')[0]} | {pelicula.runtime} min | {pelicula.genres.map(g => g.name).join(', ')}
-      </Text>
+          <TouchableOpacity
+            style={styles.favoriteIcon}
+            onPress={() => setFavorito(!favorito)}
+          >
+            <Ionicons
+              name={favorito ? "heart" : "heart-outline"}
+              size={28}
+              color={favorito ? "red" : "white"}
+            />
+          </TouchableOpacity>
+        </View>
 
-      <Text style={styles.sectionTitle}>Sinopsis</Text>
-      <Text style={styles.description}>{pelicula.overview}</Text>
+        <Text style={styles.title}>
+          {pelicula.title} ★★★★★
+        </Text>
 
-      <Text style={styles.sectionTitle}>Reparto</Text>
-      <Text style={styles.description}>
-        {cast.map(actor => actor.name).join(', ')}
-      </Text>
-    </ScrollView>
+        <Text style={styles.info}>
+          {pelicula.release_date?.split('-')[0]} | {pelicula.runtime} min | {pelicula.genres.map(g => g.name).join(', ')}
+        </Text>
+
+        <Text style={styles.subtitle}>Sinopsis</Text>
+        <Text style={styles.description}>{pelicula.overview}</Text>
+
+        <Text style={styles.subtitle}>Reparto</Text>
+        <Text style={styles.description}>
+          {cast.map(actor => actor.name).join(', ')}
+        </Text>
+      
+        {!esProximamente && (
+        <TouchableOpacity
+          style={styles.buyButton}
+          onPress={() => router.push(`/compra/${id}`)}
+        >
+          <Text style={styles.buyButtonText}>Comprar Tickets</Text>
+        </TouchableOpacity>
+      )}
+      </ScrollView>
+    
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'black',
+  },
+  container: {
     paddingHorizontal: 16,
-    paddingTop: 40
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    justifyContent: 'space-between'
-  },
-  back: {
-    fontSize: 24,
-    color: '#fff'
-  },
-  appName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff'
-  },
-  logo: {
-    width: 28,
-    height: 28
-  },
-  posterWrapper: {
-    alignItems: 'center',
-    marginVertical: 12
-  },
-  poster: {
-    width: 250,
-    height: 360,
-    borderRadius: 12
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginVertical: 8
-  },
-  subinfo: {
-    fontSize: 14,
-    color: '#ccc',
-    marginBottom: 16
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 16
-  },
-  description: {
-    fontSize: 14,
-    color: '#ddd',
-    marginTop: 6
+    backgroundColor: 'black',
   },
   loader: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000'
-  }
+    backgroundColor: 'black',
+  },
+  posterWrapper: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  poster: {
+    width: 200,
+    height: 300,
+    borderRadius: 12,
+  },
+  favoriteIcon: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 6,
+  },
+  title: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  info: {
+    color: 'gray',
+    marginVertical: 6,
+  },
+  subtitle: {
+    marginTop: 12,
+    fontWeight: 'bold',
+    color: 'white',
+    fontSize: 16,
+  },
+  description: {
+    color: 'white',
+    marginBottom: 12,
+  },
+  buyButton: {
+    backgroundColor: '#ff4081',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  buyButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
 
 export default PeliculaSeleccionada;

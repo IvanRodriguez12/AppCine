@@ -41,7 +41,16 @@ const CarteleraPage: React.FC = () => {
       );
       const data = await response.json();
       if (data.results) {
-        setPeliculas(data.results);
+        
+      const hoy = new Date();
+      const filtradas = data.results.filter((pelicula: any) => {
+        const estreno = new Date(pelicula.release_date);
+        return modo === 'now_playing'
+          ? estreno <= hoy
+          : estreno > hoy;
+      });
+      setPeliculas(filtradas);
+    
       } else {
         console.warn('No se encontraron resultados:', data);
       }
