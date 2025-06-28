@@ -15,12 +15,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import { Ionicons } from '@expo/vector-icons';
 
 const CrearCuenta = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   const colors = {
     primary: '#E50914',
@@ -144,23 +146,41 @@ const CrearCuenta = () => {
                 {emailError}
               </Text>
             )}
-            <Text style={[styles.label, {color: colors.lightText}]}>Contraseña</Text>
-            <TextInput
-              style={[
-                styles.input, 
-                {
-                  backgroundColor: colors.inputBg,
-                  color: colors.lightText,
-                  borderColor: colors.divider
-                }
-              ]}
-              placeholder="Crea una contraseña"
-              placeholderTextColor={colors.placeholder}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              textContentType="newPassword"
-            />
+            <Text style={[styles.label, { color: colors.lightText }]}>Contraseña</Text>
+            <View style={{ position: 'relative' }}>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBg,
+                    color: colors.lightText,
+                    borderColor: colors.divider,
+                    paddingRight: moderateScale(50), 
+                  },
+                ]}
+                placeholder="Crea una contraseña"
+                placeholderTextColor={colors.placeholder}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!mostrarPassword}
+                textContentType="newPassword"
+              />
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  right: moderateScale(10),
+                  top: moderateScale(14),
+                }}
+                onPress={() => setMostrarPassword((prev) => !prev)}
+              >
+                <Ionicons
+                  name={mostrarPassword ? 'eye-off' : 'eye'}
+                  size={32}
+                  color={colors.placeholder}
+                />
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity 
               style={[styles.registerButton, {backgroundColor: colors.primary}]}
               onPress={handleRegister}

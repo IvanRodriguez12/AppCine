@@ -40,7 +40,7 @@ const MenuPrincipal: React.FC = () => {
       const response = await fetch(TMDB_API_URL);
       const data = await response.json();
       if (data.results) {
-        setPeliculas(data.results.slice(0, 5)); // Limita a 5 películas
+        setPeliculas(data.results.slice(0, 5));
       }
     } catch (error) {
       console.error('Error al obtener películas:', error);
@@ -56,7 +56,7 @@ const MenuPrincipal: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
-          <Ionicons name="menu" size={28} color="white" />
+          <Ionicons name="menu" size={35} color="white" />
         </TouchableOpacity>
         <Text style={styles.title}>CineApp</Text>
         <Image
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(10),
   },
   menuButton: {
-    padding: moderateScale(4),
+    padding: moderateScale(),
   },
   title: {
     fontSize: moderateScale(22),
