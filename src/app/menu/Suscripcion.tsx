@@ -1,13 +1,13 @@
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import Header from '@/components/Header';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Image,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
@@ -15,27 +15,18 @@ const Suscripcion: React.FC = () => {
   const router = useRouter();
 
   const handleComprarPress = (): void => {
-    // Aquí puedes agregar la lógica para procesar la compra
     console.log('Procesando compra de suscripción...');
-  };
-
-  const handleBackPress = (): void => {
-    router.back();
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <Ionicons name="arrow-back" size={28} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.title}>CineApp</Text>
-        <Image
-          source={require('../../assets/images/adaptive-icon.png')}
-          style={styles.logo}
-        />
-      </View>
+      {/* Header reutilizable */}
+      <Header
+        title="CineApp"
+        onBack={() => {
+          router.back();
+        }}
+      />
 
       {/* Título principal */}
       <Text style={styles.mainTitle}>DETALLES SUSCRIPCIÓN</Text>
@@ -48,18 +39,18 @@ const Suscripcion: React.FC = () => {
 
       {/* Beneficios */}
       <Text style={styles.benefitsTitle}>Beneficios</Text>
-      
+
       <View style={styles.benefitsList}>
         <View style={styles.benefitItem}>
           <Ionicons name="checkmark" size={20} color="#4CAF50" />
           <Text style={styles.benefitText}>Acceso anticipado a entradas</Text>
         </View>
-        
+
         <View style={styles.benefitItem}>
           <Ionicons name="checkmark" size={20} color="#4CAF50" />
           <Text style={styles.benefitText}>Descuentos especiales</Text>
         </View>
-        
+
         <View style={styles.benefitItem}>
           <Ionicons name="checkmark" size={20} color="#4CAF50" />
           <Text style={styles.benefitText}>Coleccionables limitados</Text>
@@ -70,19 +61,6 @@ const Suscripcion: React.FC = () => {
       <TouchableOpacity style={styles.buyButton} onPress={handleComprarPress}>
         <Text style={styles.buyButtonText}>Comprar</Text>
       </TouchableOpacity>
-
-      {/* Bottom navigation icons */}
-      <View style={styles.bottomNavigation}>
-        <TouchableOpacity style={styles.navIcon}>
-          <Ionicons name="play" size={24} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navIcon}>
-          <View style={styles.recordButton} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navIcon}>
-          <Ionicons name="pause" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -92,27 +70,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'black',
     paddingHorizontal: moderateScale(16),
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: verticalScale(20),
-    marginBottom: verticalScale(30),
-  },
-  backButton: {
-    padding: moderateScale(4),
-  },
-  title: {
-    fontSize: moderateScale(22),
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  logo: {
-    width: moderateScale(80),
-    height: moderateScale(80),
-    resizeMode: 'contain',
-    borderRadius: moderateScale(8),
   },
   mainTitle: {
     fontSize: moderateScale(24),

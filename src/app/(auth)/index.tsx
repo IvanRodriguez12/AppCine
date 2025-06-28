@@ -1,8 +1,8 @@
-import imagePath from "@/src/constants/imagePath";
-import { router } from "expo-router";
-import React, { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import imagePath from "@/constants/imagePath";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from "expo-router";
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const Auth = () => {

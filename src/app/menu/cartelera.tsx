@@ -1,3 +1,4 @@
+import Header from '@/components/Header';
 import { TMDB_API_KEY } from '@env';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -11,8 +12,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { moderateScale } from 'react-native-size-matters';
 
-const TMDB_API_URL = `https://api.themoviedb.org/3/movie/now_playing?language=es-AR&page=1&api_key=${TMDB_API_KEY}`;
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
 interface Pelicula {
@@ -23,17 +24,21 @@ interface Pelicula {
 }
 
 const CarteleraPage: React.FC = () => {
+  const router = useRouter();
   const [peliculas, setPeliculas] = useState<Pelicula[]>([]);
   const [cargando, setCargando] = useState(true);
-  const router = useRouter();
+  const [modo, setModo] = useState<'now_playing' | 'upcoming'>('now_playing');
 
   useEffect(() => {
     fetchPeliculas();
-  }, []);
+  }, [modo]);
 
   const fetchPeliculas = async () => {
+    setCargando(true);
     try {
-      const response = await fetch(TMDB_API_URL);
+      const response = await fetch(
+        `https://api.themoviedb.org/3/movie/${modo}?language=es-AR&page=1&api_key=${TMDB_API_KEY}`
+      );
       const data = await response.json();
       if (data.results) {
         setPeliculas(data.results);
@@ -47,56 +52,59 @@ const CarteleraPage: React.FC = () => {
     }
   };
 
-  if (cargando) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#ff4081" />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Image source={require('../../assets/images/adaptive-icon.png')} style={styles.logo} />
-        <Text style={styles.appName}>CineApp</Text>
-      </View>
+      <Header
+        title="CineApp"
+        onBack={() => {
+          router.back();
+        }}
+      />
 
       <View style={styles.navButtons}>
-        <TouchableOpacity style={styles.activeNavButton}>
-          <Text style={styles.activeNavText}>Estrenos</Text>
+        <TouchableOpacity
+          style={modo === 'now_playing' ? styles.activeNavButton : styles.inactiveNavButton}
+          onPress={() => setModo('now_playing')}
+        >
+          <Text style={modo === 'now_playing' ? styles.activeNavText : styles.inactiveNavText}>Estrenos</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.inactiveNavButton}>
-          <Text style={styles.inactiveNavText}>Próximamente</Text>
+        <TouchableOpacity
+          style={modo === 'upcoming' ? styles.activeNavButton : styles.inactiveNavButton}
+          onPress={() => setModo('upcoming')}
+        >
+          <Text style={modo === 'upcoming' ? styles.activeNavText : styles.inactiveNavText}>Próximamente</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.grid}>
-          {peliculas.map((pelicula) => (
-            <View key={pelicula.id} style={styles.card}>
-              <View style={styles.imageWrapper}>
-                {typeof pelicula.poster_path === 'string' && pelicula.poster_path.trim() !== '' ? (
-                  <Image
-                    source={{ uri: `${TMDB_IMAGE_BASE}${pelicula.poster_path}` }}
-                    style={styles.poster}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.poster, styles.placeholder]}>
-                    <Text style={{ color: '#fff' }}>Sin imagen</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.nombre} numberOfLines={2}>{pelicula.title}</Text>
-              <Text style={styles.puntaje}>⭐ {pelicula.vote_average.toFixed(1)}/10</Text>
-            </View>
-          ))}
+      {cargando ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#ff4081" />
         </View>
-      </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <View style={styles.grid}>
+            {peliculas.map((pelicula) => (
+              <TouchableOpacity key={pelicula.id} style={styles.card} onPress={() => router.push(`/menu/${pelicula.id}`)}>
+                <View style={styles.imageWrapper}>
+                  {typeof pelicula.poster_path === 'string' && pelicula.poster_path.trim() !== '' ? (
+                    <Image
+                      source={{ uri: `${TMDB_IMAGE_BASE}${pelicula.poster_path}` }}
+                      style={styles.poster}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.poster, styles.placeholder]}>
+                      <Text style={{ color: '#fff' }}>Sin imagen</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.nombre} numberOfLines={2}>{pelicula.title}</Text>
+                <Text style={styles.puntaje}>⭐ {pelicula.vote_average.toFixed(1)}/10</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -107,40 +115,16 @@ const cardWidth = (width - 48) / 2;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f0f0f',
-    paddingTop: 40
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    marginBottom: 10
-  },
-  backButton: {
-    marginRight: 10
-  },
-  backText: {
-    fontSize: 24,
-    color: '#fff'
-  },
-  logo: {
-    width: 32,
-    height: 32,
-    marginRight: 8,
-    borderRadius: 6
-  },
-  appName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff'
+    backgroundColor: 'black',
+    paddingHorizontal: moderateScale(10),
   },
   navButtons: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    marginBottom: 10
+    marginBottom: 20,
   },
   activeNavButton: {
-    backgroundColor: '#8B0000',
+    backgroundColor: 'red',
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 20
@@ -150,13 +134,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold'
   },
   inactiveNavButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#4a4a4a',
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 20
   },
   inactiveNavText: {
-    color: '#aaa'
+    color: '#fff'
   },
   scrollContainer: {
     paddingHorizontal: 12,
