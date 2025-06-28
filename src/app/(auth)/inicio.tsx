@@ -1,4 +1,4 @@
-import imagePath from '@/src/constants/imagePath';
+import imagePath from '@/constants/imagePath';
 import { router } from 'expo-router';
 import React from 'react';
 import { Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';

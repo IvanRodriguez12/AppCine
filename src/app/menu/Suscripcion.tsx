@@ -1,16 +1,15 @@
+import Header from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Image,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
-import Header from '@/src/components/Header';
 
 const Suscripcion: React.FC = () => {
   const router = useRouter();

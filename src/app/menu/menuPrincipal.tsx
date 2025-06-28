@@ -1,4 +1,4 @@
-import MenuLateral from '@/src/components/menuLateral';
+import MenuLateral from '@/components/menuLateral';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';

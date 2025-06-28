@@ -1,17 +1,17 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  Image,
-  BackHandler,
-} from 'react-native';
+import Header from '@/components/Header';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import {
+  BackHandler,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
-import Header from '@/src/components/Header';
 
 interface NewsItem {
   id: number;
