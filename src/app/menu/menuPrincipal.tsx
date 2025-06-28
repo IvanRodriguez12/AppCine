@@ -1,7 +1,7 @@
 import MenuLateral from '@/components/menuLateral';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -13,17 +13,43 @@ import {
   View,
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import { TMDB_API_KEY } from '@env';
 
 const anchoPantalla = Dimensions.get('window').width;
+const TMDB_API_URL = `https://api.themoviedb.org/3/movie/now_playing?language=es-AR&page=1&api_key=${TMDB_API_KEY}`;
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+interface Pelicula {
+  id: number;
+  title: string;
+  poster_path: string;
+}
 
 const MenuPrincipal: React.FC = () => {
   const router = useRouter();
   const [indexSlide, setIndexSlide] = useState<number>(0);
   const [menuVisible, setMenuVisible] = useState<boolean>(false);
+  const [peliculas, setPeliculas] = useState<Pelicula[]>([]);
 
   const handleNovedadesPress = (): void => {
-  router.navigate('/menu/NovedadesAnuncios');
-};
+    router.navigate('/menu/NovedadesAnuncios');
+  };
+
+  const fetchPeliculas = async () => {
+    try {
+      const response = await fetch(TMDB_API_URL);
+      const data = await response.json();
+      if (data.results) {
+        setPeliculas(data.results.slice(0, 5)); // Limita a 5 películas
+      }
+    } catch (error) {
+      console.error('Error al obtener películas:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPeliculas();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -47,7 +73,6 @@ const MenuPrincipal: React.FC = () => {
         <View style={styles.menuPrincipalBtn}>
           <Text style={styles.menuPrincipalText}>MENU PRINCIPAL</Text>
         </View>
-
         <TouchableOpacity style={styles.cartIcon}>
           <FontAwesome5 name="shopping-cart" size={25} color="white" />
         </TouchableOpacity>
@@ -64,14 +89,28 @@ const MenuPrincipal: React.FC = () => {
             setIndexSlide(slideIndex);
           }}
         >
-          {[1, 2, 3, 4, 5].map((num) => (
-            <TouchableOpacity key={num} style={styles.carouselItem}>
-              <Text style={styles.carouselText}>PELICULA {num}</Text>
+          {peliculas.map((pelicula) => (
+            <TouchableOpacity
+              key={pelicula.id}
+              style={styles.carouselItem}
+              onPress={() => router.push('/menu/cartelera')}
+            >
+              {pelicula.poster_path ? (
+                <Image
+                  source={{ uri: `${TMDB_IMAGE_BASE}${pelicula.poster_path}` }}
+                  style={styles.posterImage}
+                />
+              ) : (
+                <View style={[styles.posterImage, { justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: 'white' }}>Sin imagen</Text>
+                </View>
+              )}
+              <Text style={styles.carouselText}>{pelicula.title}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
         <View style={styles.dots}>
-          {[0, 1, 2, 3, 4].map((i) => (
+          {peliculas.map((_, i) => (
             <View key={i} style={[styles.dot, indexSlide === i && styles.dotActive]} />
           ))}
         </View>
@@ -79,19 +118,33 @@ const MenuPrincipal: React.FC = () => {
 
       {/* Secciones */}
       <View style={styles.sectionRow}>
-        <TouchableOpacity style={styles.sectionBox} 
-        onPress={() => router.push('/menu/cartelera')}>
-          <Ionicons name="play-circle" size={36} color="white" />
-          <Text style={styles.sectionText}>Cartelera</Text>
+        <TouchableOpacity style={styles.sectionEstrenos} onPress={() => router.push('/menu/cartelera')}>
+          {peliculas[0]?.poster_path && (
+            <Image
+              source={{ uri: `${TMDB_IMAGE_BASE}${peliculas[0].poster_path}` }}
+              style={styles.sectionImage}
+            />
+          )}
+          <View style={styles.overlay}>
+            <Ionicons name="play" size={28} color="white" />
+            <Text style={styles.overlayText}>Estrenos /{'\n'}Próximamente</Text>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.sectionBox}>
-          <Text style={styles.sectionTitle}>CANDY SHOP</Text>
+
+        <TouchableOpacity style={styles.sectionCandy}>
+          <Image
+            source={require('../../assets/images/Confiteria.png')}
+            style={styles.sectionImage}
+          />
+          <View style={styles.overlay}>
+            <Text style={styles.overlayText}>CANDY SHOP</Text>
+          </View>
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.sectionFull} onPress={() => router.push('/menu/Suscripcion')}>
-          <Text style={styles.sectionTitle}>SUSCRIPCIÓN</Text>
-          <Text style={styles.sectionSubText}>Accede a diferentes promociones y más</Text>
+        <Text style={styles.sectionTitle}>SUSCRIPCIÓN</Text>
+        <Text style={styles.sectionSubText}>Accede a diferentes promociones y más</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.sectionFull} onPress={handleNovedadesPress}>
@@ -158,17 +211,28 @@ const styles = StyleSheet.create({
   },
   carouselItem: {
     width: anchoPantalla - moderateScale(32),
-    height: verticalScale(160),
+    height: verticalScale(200),
     backgroundColor: '#4a4a4a',
     borderRadius: moderateScale(12),
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    overflow: 'hidden',
     marginHorizontal: moderateScale(0.4),
+  },
+  posterImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: moderateScale(12),
+    resizeMode: 'cover',
   },
   carouselText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: moderateScale(20),
+    fontSize: moderateScale(16),
+    marginBottom: verticalScale(10),
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: verticalScale(2),
+    borderRadius: moderateScale(6),
   },
   dots: {
     flexDirection: 'row',
@@ -190,29 +254,50 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: verticalScale(12),
   },
-  sectionBox: {
+  sectionEstrenos: {
     width: '48%',
-    backgroundColor: '#4a4a4a',
+    height: verticalScale(120),
     borderRadius: moderateScale(12),
-    alignItems: 'center',
-    padding: moderateScale(16),
+    overflow: 'hidden',
+    backgroundColor: '#4a4a4a',
   },
-  sectionText: {
+  sectionCandy: {
+    width: '48%',
+    height: verticalScale(120),
+    borderRadius: moderateScale(12),
+    overflow: 'hidden',
+    backgroundColor: '#4a4a4a',
+  },
+  sectionImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    resizeMode: 'cover',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(8),
+  },
+  overlayText: {
     color: 'white',
+    fontWeight: 'bold',
     fontSize: moderateScale(13),
     textAlign: 'center',
     marginTop: verticalScale(6),
-  },
-  sectionTitle: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: moderateScale(16),
   },
   sectionFull: {
     backgroundColor: '#4a4a4a',
     borderRadius: moderateScale(12),
     padding: moderateScale(16),
     marginBottom: verticalScale(14),
+  },
+  sectionTitle: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: moderateScale(16),
   },
   sectionSubText: {
     color: '#ccc',
