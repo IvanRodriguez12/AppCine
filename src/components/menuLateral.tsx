@@ -326,12 +326,13 @@ const styles = StyleSheet.create({
   userSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: verticalScale(20)
+    marginBottom: verticalScale(20),
+    marginTop: verticalScale(30)
   },
   avatar: {
-    width: moderateScale(44),
-    height: moderateScale(44),
-    borderRadius: moderateScale(22),
+    width: moderateScale(60),
+    height: moderateScale(60),
+    borderRadius: moderateScale(30),
     backgroundColor: 'red',
     justifyContent: 'center',
     alignItems: 'center',
@@ -339,15 +340,17 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: 'white',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    fontSize: moderateScale(24)
   },
   userName: {
     color: 'white',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    fontSize: moderateScale(18)
   },
   userEmail: {
     color: '#ccc',
-    fontSize: moderateScale(12)
+    fontSize: moderateScale(14)
   },
   menuItem: {
     flexDirection: 'row',
