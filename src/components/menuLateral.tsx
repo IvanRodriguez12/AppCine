@@ -224,7 +224,13 @@ useEffect(() => {
 
           <MenuItem icon="percent" text="Cupones" />
           <MenuItem icon="shopping-bag" text="Mis Compras" />
-          <MenuItem icon="location-pin" text="Ubicación" library="Entypo" />
+
+          {/* Sección de ubicación */}
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/Ubicacion')}>
+            <Entypo name="location-pin" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Ubicación</Text>
+          </TouchableOpacity>
+
           <MenuItem icon="checkcircleo" text="Mis Reviews" library="AntDesign" />
           <MenuItem icon="heart" text="Mis Favoritos" library="AntDesign" />
           
