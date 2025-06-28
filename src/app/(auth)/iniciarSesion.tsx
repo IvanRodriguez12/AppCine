@@ -58,11 +58,12 @@ const IniciarSesion = () => {
 
       const usuario = usuarios.find((u: any) => u.email === email && u.password === password);
       if (usuario) {
-      await AsyncStorage.setItem('usuarioActual', JSON.stringify(usuario.email));
-      router.replace('./mensajeBienvenida');
-    } else {
-    Alert.alert('Error', 'Correo o contraseña incorrectos');
-    }
+        // ✅ GUARDAMOS EL OBJETO COMPLETO (no solo el email)
+        await AsyncStorage.setItem('usuarioActual', JSON.stringify(usuario));
+        router.replace('./mensajeBienvenida');
+      } else {
+        Alert.alert('Error', 'Correo o contraseña incorrectos');
+      }
     } catch (error) {
       console.error('Error al iniciar sesión:', error);
       Alert.alert('Error', 'Ocurrió un error al intentar iniciar sesión');

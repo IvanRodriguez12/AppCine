@@ -305,15 +305,15 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)'
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: width,
+    height: height,
   },
   menu: {
     width: width * 0.75,
-    height: height,
+    height: verticalScale(722),
     backgroundColor: '#111',
     padding: moderateScale(20),
-    borderTopRightRadius: moderateScale(20),
-    borderBottomRightRadius: moderateScale(20),
     elevation: 10,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 4 },
