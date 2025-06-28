@@ -123,7 +123,7 @@ const PeliculaSeleccionada = () => {
         {!esProximamente && (
         <TouchableOpacity
           style={styles.buyButton}
-          onPress={() => router.push(`/compra/${id}`)}
+          onPress={() => router.push(`/menu/compra/${id}`)}
         >
           <Text style={styles.buyButtonText}>Comprar Tickets</Text>
         </TouchableOpacity>
