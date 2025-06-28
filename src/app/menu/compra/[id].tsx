@@ -96,7 +96,15 @@ const CompraTicket = () => {
 
         <TouchableOpacity
           style={styles.button}
-          onPress={() => router.push(`/asientos/${id}`)}
+          onPress={() =>
+            router.push({
+                pathname: `/menu/asientos/${id}`,
+                params: {
+                fecha: dias[diaSeleccionado],
+                hora: horarios[horaSeleccionada],
+                },
+            })
+          }
         >
           <Text style={styles.buttonText}>Seleccionar asientos</Text>
         </TouchableOpacity>
