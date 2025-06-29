@@ -9,7 +9,7 @@ import { moderateScale, verticalScale } from 'react-native-size-matters';
 const PRODUCTOS = [
   {
     id: '1',
-    nombre: 'Combo Palomitas + Bebida',
+    nombre: 'Combo Pochoclo + Gaseosa',
     tipo: 'promocion',
     imagen: require('../../assets/images/palomitas1.jpeg'),
     precios: { pequeño: 800, mediano: 1200, grande: 1600 },
@@ -17,7 +17,7 @@ const PRODUCTOS = [
   },
   {
     id: '2',
-    nombre: 'Coca-Cola',
+    nombre: 'Gaseosa',
     tipo: 'bebida',
     imagen: require('../../assets/images/cocacola.jpeg'),
     precios: { pequeño: 600, mediano: 900, grande: 1200 },
@@ -25,20 +25,52 @@ const PRODUCTOS = [
   },
   {
     id: '3',
-    nombre: 'Nachos con queso',
+    nombre: 'Agua',
+    tipo: 'bebida',
+    imagen: require('../../assets/images/agua.jpeg'),
+    precios: { pequeño: 500, mediano: 800, grande: 1000 },
+    categoria: 'bebida',
+  },
+  {
+    id: '4',
+    nombre: 'Agua saborizada',
+    tipo: 'bebida',
+    imagen: require('../../assets/images/aguasaborizada.jpeg'),
+    precios: { pequeño: 550, mediano: 850, grande: 1050 },
+    categoria: 'bebida',
+  },
+  {
+    id: '5',
+    nombre: 'Pochoclo',
     tipo: 'comida',
-    imagen: require('../../assets/images/nachos.jpeg'),
+    imagen: require('../../assets/images/palomitas1.jpeg'),
     precios: { pequeño: 700, mediano: 1000, grande: 1300 },
     categoria: 'comida',
   },
   {
-    id: '4',
-    nombre: 'Gomitas',
+    id: '6',
+    nombre: 'Turrón',
     tipo: 'otros',
-    imagen: require('../../assets/images/gomitas.jpeg'),
-    precios: { pequeño: 500, mediano: 800, grande: 1100 },
+    imagen: require('../../assets/images/turron.jpeg'),
+    precios: { único: 400 },
     categoria: 'otros',
   },
+  {
+    id: '7',
+    nombre: 'Alfajor',
+    tipo: 'otros',
+    imagen: require('../../assets/images/alfajor.jpeg'),
+    precios: { único: 500 },
+    categoria: 'otros',
+  },
+  {
+    id: '8',
+    nombre: 'Papas fritas',
+    tipo: 'comida',
+    imagen: require('../../assets/images/papas.jpeg'),
+    precios: { único: 600 },
+    categoria: 'otros',
+  }
 ];
 
 const CATEGORIAS = [
@@ -67,13 +99,20 @@ const CandyShop = () => {
     setTamaniosSeleccionados(prev => ({ ...prev, [productoId]: tamanio }));
   };
 
+
+  const tieneTamanios = (producto: any) => {
+    return Object.keys(producto.precios).length > 1;
+  };
   const agregarAlCarrito = (producto: any) => {
-    const tamanio = tamaniosSeleccionados[producto.id] || 'mediano';
-    setCarrito(prev => [...prev, { ...producto, tamanio }]);
+    const tamanio = tieneTamanios(producto)
+      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      : 'único';
+    setCarrito(prev => [...prev, { ...producto, tamanio }],);
   };
 
   const totalCarrito = carrito.reduce(
-    (acc, item) => acc + item.precios[item.tamanio as keyof typeof item.precios], 0
+    (acc, item) => acc + item.precios[(item.tamanio !== 'único' ? `Tamaño: ${item.tamanio}` : '')],
+    0
   );
 
   return (
