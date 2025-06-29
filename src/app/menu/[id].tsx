@@ -1,3 +1,4 @@
+// src/app/menu/cartelera/[id].tsx
 import Header from '@/components/Header';
 import { TMDB_API_KEY } from '@env';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Genre {
   id: number;
@@ -20,12 +22,14 @@ interface Genre {
 }
 
 interface Pelicula {
+  id: number;
   title: string;
   release_date: string;
   runtime: number;
   genres: Genre[];
   overview: string;
   poster_path: string;
+  vote_average: number;
 }
 
 interface CastMember {
@@ -60,8 +64,32 @@ const PeliculaSeleccionada = () => {
       }
     };
 
-    if (id) fetchDetails();
+    const checkFavorito = async () => {
+      const favoritosStr = await AsyncStorage.getItem('favoritos');
+      const favoritos = favoritosStr ? JSON.parse(favoritosStr) : [];
+      setFavorito(favoritos.includes(Number(id)));
+    };
+
+    if (id) {
+      fetchDetails();
+      checkFavorito();
+    }
   }, [id]);
+
+  const toggleFavorito = async () => {
+    const favoritosStr = await AsyncStorage.getItem('favoritos');
+    const favoritos = favoritosStr ? JSON.parse(favoritosStr) : [];
+
+    let actualizados;
+    if (favoritos.includes(Number(id))) {
+      actualizados = favoritos.filter((fid: number) => fid !== Number(id));
+    } else {
+      actualizados = [...favoritos, Number(id)];
+    }
+
+    await AsyncStorage.setItem('favoritos', JSON.stringify(actualizados));
+    setFavorito(!favorito);
+  };
 
   const hoy = new Date();
   const estreno = pelicula ? new Date(pelicula.release_date) : hoy;
@@ -78,12 +106,7 @@ const PeliculaSeleccionada = () => {
   return (
     <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="black" />
-      <Header
-        title="CineApp"
-        onBack={() => {
-          router.back();
-        }}
-      />
+      <Header title="CineApp" onBack={() => router.back()} />
 
       <ScrollView style={styles.container}>
         <View style={styles.posterWrapper}>
@@ -94,7 +117,7 @@ const PeliculaSeleccionada = () => {
 
           <TouchableOpacity
             style={styles.favoriteIcon}
-            onPress={() => setFavorito(!favorito)}
+            onPress={toggleFavorito}
           >
             <Ionicons
               name={favorito ? "heart" : "heart-outline"}
@@ -104,9 +127,7 @@ const PeliculaSeleccionada = () => {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.title}>
-          {pelicula.title} ★★★★★
-        </Text>
+        <Text style={styles.title}>{pelicula.title}</Text>
 
         <Text style={styles.info}>
           {pelicula.release_date?.split('-')[0]} | {pelicula.runtime} min | {pelicula.genres.map(g => g.name).join(', ')}
@@ -119,17 +140,16 @@ const PeliculaSeleccionada = () => {
         <Text style={styles.description}>
           {cast.map(actor => actor.name).join(', ')}
         </Text>
-      
+
         {!esProximamente && (
-        <TouchableOpacity
-          style={styles.buyButton}
-          onPress={() => router.push(`/menu/compra/${id}`)}
-        >
-          <Text style={styles.buyButtonText}>Comprar Tickets</Text>
-        </TouchableOpacity>
-      )}
+          <TouchableOpacity
+            style={styles.buyButton}
+            onPress={() => router.push(`/menu/compra/${id}`)}
+          >
+            <Text style={styles.buyButtonText}>Comprar Tickets</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
-    
     </View>
   );
 };
@@ -187,7 +207,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   buyButton: {
-    backgroundColor: '#ff4081',
+    backgroundColor: 'red',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',

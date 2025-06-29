@@ -154,7 +154,8 @@ const IniciarSesion = () => {
               right: moderateScale(10),
               top: moderateScale(14),
             }}
-          onPress={() => setMostrarPassword((prev) => !prev)}
+          onPressIn={() => setMostrarPassword(true)}
+          onPressOut={() => setMostrarPassword(false)}
           >
           <Ionicons
             name={mostrarPassword ? 'eye-off' : 'eye'}

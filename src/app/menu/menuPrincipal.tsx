@@ -196,17 +196,19 @@ const styles = StyleSheet.create({
   carouselItem: {
     width: anchoPantalla - moderateScale(32),
     height: verticalScale(200),
-    backgroundColor: '#4a4a4a',
+    backgroundColor: 'black',
     borderRadius: moderateScale(12),
     justifyContent: 'flex-end',
     alignItems: 'center',
     overflow: 'hidden',
-    marginHorizontal: moderateScale(0.4),
+    marginHorizontal: moderateScale(0.31),
   },
   posterImage: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: moderateScale(12),
-    resizeMode: 'cover',
+    resizeMode: 'contain',
+    borderColor: 'red',
+    borderWidth: moderateScale(1),
   },
   carouselText: {
     color: 'white',
@@ -243,7 +245,7 @@ const styles = StyleSheet.create({
     height: verticalScale(120),
     borderRadius: moderateScale(12),
     overflow: 'hidden',
-    backgroundColor: '#4a4a4a',
+    backgroundColor: 'black',
   },
   sectionCandy: {
     width: '48%',

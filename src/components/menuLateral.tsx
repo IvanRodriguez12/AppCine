@@ -232,7 +232,10 @@ useEffect(() => {
           </TouchableOpacity>
 
           <MenuItem icon="checkcircleo" text="Mis Reviews" library="AntDesign" />
-          <MenuItem icon="heart" text="Mis Favoritos" library="AntDesign" />
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisFavoritos')}>
+          <AntDesign name="heart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+          <Text style={styles.menuItemText}>Mis Favoritos</Text>
+          </TouchableOpacity>
           
           {/* Sección de calificación */}
           <TouchableOpacity style={styles.menuItem} onPress={handleRatingPress}>
