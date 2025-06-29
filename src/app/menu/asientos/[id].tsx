@@ -50,7 +50,21 @@ const Asientos = () => {
       Alert.alert('Atención', 'Debes seleccionar al menos un asiento.');
       return;
     }
-    Alert.alert('Pago confirmado', `Asientos: ${seleccionados.join(', ')}`);
+    
+    const total = seleccionados.length * precioPorAsiento;
+    const asientosString = seleccionados.join(', ');
+    
+    // Navegar al carrito de tickets con los parámetros
+    router.push({
+      pathname: 'menu/carrito/CarritoTickets',
+      params: {
+        id,
+        fecha,
+        hora,
+        asientos: asientosString,
+        total: total.toString()
+      }
+    });
   };
 
   return (
@@ -141,7 +155,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
     paddingTop: 60,
     paddingHorizontal: 16,
-    paddingBottom: 140, // espacio reservado para el resumen
+    paddingBottom: 140, 
   },
   backButton: {
     position: 'absolute',
