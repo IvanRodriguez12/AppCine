@@ -1,27 +1,25 @@
-import React, { useEffect, useState, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Dimensions,
+  AntDesign,
+  Entypo,
+  Feather,
+  Ionicons,
+  MaterialIcons
+} from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import {
   Alert,
   Animated,
+  Dimensions,
   Modal,
-  KeyboardAvoidingView,
-  Platform
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  Ionicons,
-  MaterialIcons,
-  Entypo,
-  AntDesign,
-  Feather
-} from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { moderateScale, verticalScale, scale } from 'react-native-size-matters';
+import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 import ConfirmLogout from './ConfirmLogout';
 import SessionClosed from './SessionClosed';
 
@@ -245,7 +243,11 @@ useEffect(() => {
 
           <View style={styles.separator} />
 
-          <MenuItem icon="info" text="Sobre Nosotros" library="Feather" />
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/SobreNosotros')}>
+            <AntDesign name="info" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Sobre Nosotros</Text>
+          </TouchableOpacity>
+          
           <MenuItem icon="person" text="Mi Cuenta" library="Ionicons" />
           <MenuItem icon="settings" text="Configuración" library="Feather" />
 
