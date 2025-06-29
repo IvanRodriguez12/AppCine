@@ -1,4 +1,5 @@
 import MenuLateral from '@/components/menuLateral';
+import { TMDB_API_KEY } from '@env';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -13,7 +14,6 @@ import {
   View,
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
-import { TMDB_API_KEY } from '@env';
 
 const anchoPantalla = Dimensions.get('window').width;
 const TMDB_API_URL = `https://api.themoviedb.org/3/movie/now_playing?language=es-AR&page=1&api_key=${TMDB_API_KEY}`;
@@ -111,31 +111,31 @@ const MenuPrincipal: React.FC = () => {
         </View>
       </View>
 
-      {/* Secciones */}
-      <View style={styles.sectionRow}>
-        <TouchableOpacity style={styles.sectionEstrenos} onPress={() => router.push('/menu/cartelera')}>
-          {peliculas[0]?.poster_path && (
-            <Image
-              source={{ uri: `${TMDB_IMAGE_BASE}${peliculas[0].poster_path}` }}
-              style={styles.sectionImage}
-            />
-          )}
-          <View style={styles.overlay}>
-            <Ionicons name="play" size={28} color="white" />
-            <Text style={styles.overlayText}>Estrenos /{'\n'}Próximamente</Text>
-          </View>
-        </TouchableOpacity>
+{/* Secciones */}
+<View style={styles.sectionRow}>
+  <TouchableOpacity style={styles.sectionEstrenos} onPress={() => router.push('/menu/cartelera')}>
+    {peliculas[0]?.poster_path ? (
+      <Image
+        source={{ uri: `${TMDB_IMAGE_BASE}${peliculas[0].poster_path}` }}
+        style={styles.sectionImage}
+      />
+    ) : null}
+    <View style={styles.overlay}>
+      <Ionicons name="play" size={28} color="white" />
+      <Text style={styles.overlayText}>Estrenos /{'\n'}Próximamente</Text>
+    </View>
+  </TouchableOpacity>
 
-        <TouchableOpacity style={styles.sectionCandy}>
-          <Image
-            source={require('../../assets/images/Confiteria.png')}
-            style={styles.sectionImage}
-          />
-          <View style={styles.overlay}>
-            <Text style={styles.overlayText}>CANDY SHOP</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+  <TouchableOpacity style={styles.sectionCandy} onPress={() => router.push('/menu/CandyShop')}>
+    <Image
+      source={require('../../assets/images/Confiteria.png')}
+      style={styles.sectionImage}
+    />
+    <View style={styles.overlay}>
+      <Text style={styles.overlayText}>CANDY SHOP</Text>
+    </View>
+  </TouchableOpacity>
+</View>
 
       <TouchableOpacity style={styles.sectionFull} onPress={() => router.push('/menu/Suscripcion')}>
         <Text style={styles.sectionTitle}>SUSCRIPCIÓN</Text>
