@@ -2,6 +2,7 @@
 import Header from '@/components/Header';
 import { TMDB_API_KEY } from '@env';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -14,7 +15,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Genre {
   id: number;
@@ -142,12 +142,21 @@ const PeliculaSeleccionada = () => {
         </Text>
 
         {!esProximamente && (
-          <TouchableOpacity
-            style={styles.buyButton}
-            onPress={() => router.push(`/menu/compra/${id}`)}
-          >
-            <Text style={styles.buyButtonText}>Comprar Tickets</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={styles.buyButton}
+              onPress={() => router.push(`/menu/compra/${id}`)}
+            >
+              <Text style={styles.buyButtonText}>Comprar Tickets</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.reviewButton}
+              onPress={() => router.push(`/menu/reviews/${id}`)}
+            >
+              <Text style={styles.buyButtonText}>Reviews</Text>
+            </TouchableOpacity>
+          </>
         )}
       </ScrollView>
     </View>
@@ -217,6 +226,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  reviewButton: {
+    backgroundColor: '#444',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 30, // Espaciado inferior
   },
 });
 
