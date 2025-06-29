@@ -15,7 +15,8 @@ const Suscripcion: React.FC = () => {
   const router = useRouter();
 
   const handleComprarPress = (): void => {
-    console.log('Procesando compra de suscripción...');
+    console.log('Navegando a pantalla de compra...');
+    router.push('menu/CarritoSuscripcion');
   };
 
   return (

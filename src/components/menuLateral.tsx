@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#444'
   },
   submitButton: {
-    backgroundColor: 'red' // Cambiado a rojo para mantener consistencia con la app
+    backgroundColor: 'red' 
   },
   cancelButtonText: {
     color: 'white',

@@ -1,5 +1,5 @@
 import MenuLateral from '@/components/menuLateral';
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -68,14 +68,9 @@ const MenuPrincipal: React.FC = () => {
       {/* Menú Lateral */}
       {menuVisible && <MenuLateral onClose={() => setMenuVisible(false)} />}
 
-      {/* Botón de menú principal y carrito */}
-      <View style={styles.menuRow}>
-        <View style={styles.menuPrincipalBtn}>
-          <Text style={styles.menuPrincipalText}>MENU PRINCIPAL</Text>
-        </View>
-        <TouchableOpacity style={styles.cartIcon}>
-          <FontAwesome5 name="shopping-cart" size={25} color="white" />
-        </TouchableOpacity>
+      {/* Botón de menú principal ajustado */}
+      <View style={styles.menuPrincipalBtn}>
+        <Text style={styles.menuPrincipalText}>MENU PRINCIPAL</Text>
       </View>
 
       {/* Carrusel */}
@@ -169,7 +164,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(10),
   },
   menuButton: {
-    padding: moderateScale(),
+    padding: moderateScale(1),
   },
   title: {
     fontSize: moderateScale(22),
@@ -182,29 +177,18 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     borderRadius: moderateScale(8),
   },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: moderateScale(10),
-    marginBottom: verticalScale(16),
-  },
   menuPrincipalBtn: {
-    flex: 1,
     backgroundColor: 'red',
     borderRadius: moderateScale(8),
     paddingVertical: verticalScale(12),
     alignItems: 'center',
-    height: moderateScale(64),
+    marginBottom: verticalScale(16),
+    width: '100%',
   },
   menuPrincipalText: {
     fontWeight: 'bold',
     color: 'white',
     fontSize: moderateScale(18),
-  },
-  cartIcon: {
-    backgroundColor: 'red',
-    padding: moderateScale(18),
-    borderRadius: moderateScale(8),
   },
   carouselContainer: {
     marginBottom: verticalScale(20),
