@@ -2,17 +2,17 @@ import { FontAwesome, Ionicons, MaterialCommunityIcons } from '@expo/vector-icon
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 const filas = 6;
 const columnas = 8;
-const precioPorAsiento = 15;
+const precioPorAsiento = 5;
 
 const asientosOcupados = ['A3', 'B5', 'C2', 'D8', 'E4'];
 

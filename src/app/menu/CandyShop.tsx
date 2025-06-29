@@ -1,5 +1,6 @@
 import Header from '@/components/Header';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -77,7 +78,7 @@ const CandyShop = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Candy Shop" onBack={() => {}} />
+      <Header title="Candy Shop" onBack={() => {router.back()}} />
       <View style={styles.filtrosRow}>
         {CATEGORIAS.map(cat => (
           <TouchableOpacity
