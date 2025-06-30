@@ -1,18 +1,18 @@
 import Header from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Modal,
-  Animated
+  View
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
@@ -117,7 +117,7 @@ const CarritoSuscripcion: React.FC = () => {
     return true;
   };
 
-  const handleFinalizarPago = (): void => {
+  const handleFinalizarPago = async (): Promise<void> => {
     if (!selectedPayment) {
       Alert.alert('Error', 'Seleccione un método de pago');
       return;
@@ -128,6 +128,13 @@ const CarritoSuscripcion: React.FC = () => {
     }
 
     // Mostrar popup de éxito
+    const fecha = new Date();
+      fecha.setMonth(fecha.getMonth() + 1);
+      const datos = {
+        suscripto: true,
+        renovacion: fecha.toISOString()
+      };
+      await AsyncStorage.setItem('estadoSuscripcion', JSON.stringify(datos));
     setShowSuccessModal(true);
     
     // Timer para cerrar el modal después de 3 segundos

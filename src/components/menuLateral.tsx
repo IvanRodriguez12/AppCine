@@ -218,10 +218,19 @@ useEffect(() => {
               <Text style={styles.userName}>{nombre}</Text>
               <Text style={styles.userEmail}>{correo}</Text>
             </View>
-          </View>
+</View>
 
-          <MenuItem icon="percent" text="Cupones" />
-          <TouchableOpacity
+<TouchableOpacity
+  style={styles.menuItem}
+  onPress={() => {
+    onClose();
+    router.push('/menu/Cupones');
+  }}
+>
+  <Ionicons name="pricetags-outline" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+  <Text style={styles.menuItemText}>Cupones</Text>
+</TouchableOpacity>
+<TouchableOpacity
   style={styles.menuItem}
   onPress={() => {
     onClose();

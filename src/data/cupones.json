@@ -1,0 +1,59 @@
+{
+    "cupones": [
+        {
+            "codigo": "POCHO10",
+            "titulo": "$10 de Regalo",
+            "descripcion": "Descuento en Candy Shop",
+            "objeto": "candyshop",
+            "tipo": "fijo",
+            "descuento": 10,
+            "vencimiento": "2025-06-01",
+            "icono": "lollipop.png",
+            "premium": false
+        },
+        {
+            "codigo": "CANDY25",
+            "titulo": "25% OFF",
+            "descripcion": "Cualquier combo de la Candy Shop",
+            "objeto": "candyshop",
+            "tipo": "porcentaje",
+            "descuento": 25,
+            "vencimiento": "2025-07-15",
+            "icono": "combo.png",
+            "premium": true
+        },
+        {
+            "codigo": "2X1TICKET",
+            "titulo": "Paga 1 Lleva 2",
+            "descripcion": "Promoción en entradas",
+            "objeto": "ticket",
+            "tipo": "2x1",
+            "descuento": null,
+            "vencimiento": "2025-10-25",
+            "icono": "ticket.png",
+            "premium": true
+        },
+        {
+            "codigo": "PREMIUM50",
+            "titulo": "50% OFF Premium",
+            "descripcion": "Solo para suscriptores",
+            "objeto": "ticket",
+            "tipo": "porcentaje",
+            "descuento": 50,
+            "vencimiento": "2025-12-31",
+            "icono": "ticket.png",
+            "premium": true
+        },
+        {
+            "codigo": "SNACKPREM",
+            "titulo": "Combo gratis",
+            "descripcion": "Combo de pochoclos y gaseosa gratis",
+            "objeto": "candyshop",
+            "tipo": "fijo",
+            "descuento": 1200,
+            "vencimiento": "2025-11-15",
+            "icono": "combo.png",
+            "premium": false
+        }
+    ]
+}

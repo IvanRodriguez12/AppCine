@@ -12,7 +12,7 @@ const PRODUCTOS = [
     nombre: 'Combo Pochoclo + Gaseosa',
     tipo: 'promocion',
     imagen: require('../../assets/images/palomitas1.jpeg'),
-    precios: { pequeño: 800, mediano: 1200, grande: 1600 },
+    precios: { pequeño: 2.5, mediano: 3.5, grande: 4.5 },
     categoria: 'comida',
   },
   {
@@ -20,7 +20,7 @@ const PRODUCTOS = [
     nombre: 'Gaseosa',
     tipo: 'bebida',
     imagen: require('../../assets/images/cocacola.jpeg'),
-    precios: { pequeño: 600, mediano: 900, grande: 1200 },
+    precios: { pequeño: 1.5, mediano: 2.0, grande: 2.5 },
     categoria: 'bebida',
   },
   {
@@ -28,7 +28,7 @@ const PRODUCTOS = [
     nombre: 'Agua',
     tipo: 'bebida',
     imagen: require('../../assets/images/agua.jpeg'),
-    precios: { pequeño: 500, mediano: 800, grande: 1000 },
+    precios: { pequeño: 1.0, mediano: 1.5, grande: 2.0 },
     categoria: 'bebida',
   },
   {
@@ -36,7 +36,7 @@ const PRODUCTOS = [
     nombre: 'Agua saborizada',
     tipo: 'bebida',
     imagen: require('../../assets/images/aguasaborizada.jpeg'),
-    precios: { pequeño: 550, mediano: 850, grande: 1050 },
+    precios: { pequeño: 1.2, mediano: 1.7, grande: 2.2 },
     categoria: 'bebida',
   },
   {
@@ -44,7 +44,7 @@ const PRODUCTOS = [
     nombre: 'Pochoclo',
     tipo: 'comida',
     imagen: require('../../assets/images/palomitas1.jpeg'),
-    precios: { pequeño: 700, mediano: 1000, grande: 1300 },
+    precios: { pequeño: 2.0, mediano: 3.0, grande: 4.0 },
     categoria: 'comida',
   },
   {
@@ -52,7 +52,7 @@ const PRODUCTOS = [
     nombre: 'Turrón',
     tipo: 'otros',
     imagen: require('../../assets/images/turron.jpeg'),
-    precios: { único: 400 },
+    precios: { único: 1.0 },
     categoria: 'otros',
   },
   {
@@ -60,7 +60,7 @@ const PRODUCTOS = [
     nombre: 'Alfajor',
     tipo: 'otros',
     imagen: require('../../assets/images/alfajor.jpeg'),
-    precios: { único: 500 },
+    precios: { único: 1.2 },
     categoria: 'otros',
   },
   {
@@ -68,7 +68,7 @@ const PRODUCTOS = [
     nombre: 'Papas fritas',
     tipo: 'comida',
     imagen: require('../../assets/images/papas.jpeg'),
-    precios: { único: 600 },
+    precios: { único: 1.8 },
     categoria: 'otros',
   }
 ];
@@ -110,10 +110,10 @@ const CandyShop = () => {
     setCarrito(prev => [...prev, { ...producto, tamanio }],);
   };
 
-  const totalCarrito = carrito.reduce(
-    (acc, item) => acc + item.precios[(item.tamanio !== 'único' ? `Tamaño: ${item.tamanio}` : '')],
-    0
-  );
+  const totalCarrito = carrito.reduce((acc, item) => {
+    const precio = (item.precios as any)[item.tamanio];
+    return acc + precio;
+  }, 0).toFixed(2);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -145,43 +145,56 @@ const CandyShop = () => {
           styles.lista,
           { paddingBottom: 100 + insets.bottom }, // Ajusta el padding inferior
         ]}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Image source={item.imagen} style={styles.imagen} />
-            <View style={styles.info}>
-              <Text style={styles.nombre}>{item.nombre}</Text>
-              <View style={styles.tamaniosRow}>
-                {TAMANIOS.map(tam => (
-                  <TouchableOpacity
-                    key={tam}
-                    style={[
-                      styles.tamanioBtn,
-                      (tamaniosSeleccionados[item.id] || 'mediano') === tam && styles.tamanioBtnActivo,
-                    ]}
-                    onPress={() => handleSeleccionTamanio(item.id, tam)}
-                  >
-                    <Text style={[
-                      styles.tamanioBtnText,
-                      (tamaniosSeleccionados[item.id] || 'mediano') === tam && styles.tamanioBtnTextActivo,
-                    ]}>
-                      {tam.charAt(0).toUpperCase() + tam.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+        renderItem={({ item }) => {
+          const tieneTamanios = Object.keys(item.precios).length > 1;
+          const tamanioSeleccionado = tieneTamanios
+            ? (tamaniosSeleccionados[item.id] || 'mediano')
+            : 'único';
+
+          const precio = (item.precios as any)[tamanioSeleccionado];
+
+          return (
+            <View style={styles.card}>
+              <Image source={item.imagen} style={styles.imagen} />
+              <View style={styles.info}>
+                <Text style={styles.nombre}>{item.nombre}</Text>
+
+                {/* Solo muestra botones de tamaño si hay más de uno */}
+                {tieneTamanios && (
+                  <View style={styles.tamaniosRow}>
+                    {TAMANIOS.map(tam => (
+                      <TouchableOpacity
+                        key={tam}
+                        style={[
+                          styles.tamanioBtn,
+                          (tamaniosSeleccionados[item.id] || 'mediano') === tam && styles.tamanioBtnActivo,
+                        ]}
+                        onPress={() => handleSeleccionTamanio(item.id, tam)}
+                      >
+                        <Text style={[
+                          styles.tamanioBtnText,
+                          (tamaniosSeleccionados[item.id] || 'mediano') === tam && styles.tamanioBtnTextActivo,
+                        ]}>
+                          {tam.charAt(0).toUpperCase() + tam.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <Text style={styles.precio}>${precio} USD</Text>
+
+                <TouchableOpacity
+                  style={styles.agregarBtn}
+                  onPress={() => agregarAlCarrito(item)}
+                >
+                  <Ionicons name="cart" size={18} color="white" />
+                  <Text style={styles.agregarBtnText}>Agregar</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.precio}>
-                ${item.precios[(tamaniosSeleccionados[item.id] || 'mediano') as keyof typeof item.precios]}
-              </Text>
-              <TouchableOpacity
-                style={styles.agregarBtn}
-                onPress={() => agregarAlCarrito(item)}
-              >
-                <Ionicons name="cart" size={18} color="white" />
-                <Text style={styles.agregarBtnText}>Agregar</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
 
       {/* Carrito */}

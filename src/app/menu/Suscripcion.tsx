@@ -1,7 +1,8 @@
 import Header from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -9,58 +10,81 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const Suscripcion: React.FC = () => {
   const router = useRouter();
+  const [suscripto, setSuscripto] = useState(false);
+  const [fechaRenovacion, setFechaRenovacion] = useState<string | null>(null);
 
-  const handleComprarPress = (): void => {
-    router.push('menu/carrito/CarritoSuscripcion');
+  useEffect(() => {
+    const cargarEstado = async () => {
+      const estado = await AsyncStorage.getItem('estadoSuscripcion');
+      if (estado) {
+        const datos = JSON.parse(estado);
+        setSuscripto(datos.suscripto);
+        setFechaRenovacion(datos.renovacion);
+      }
+    };
+    cargarEstado();
+  }, []);
+
+  const handleCancelarPress = async (): Promise<void> => {
+    await AsyncStorage.removeItem('estadoSuscripcion');
+    setSuscripto(false);
+    setFechaRenovacion(null);
+  };
+
+  const formatoFecha = (fechaISO: string) => {
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header reutilizable */}
-      <Header
-        title="CineApp"
-        onBack={() => {
-          router.back();
-        }}
-      />
+      <Header title="CineApp" onBack={() => router.back()} />
 
-      {/* Título principal */}
       <Text style={styles.mainTitle}>DETALLES SUSCRIPCIÓN</Text>
 
-      {/* Card de suscripción */}
       <View style={styles.subscriptionCard}>
         <Text style={styles.subscriptionTitle}>Suscripción</Text>
         <Text style={styles.price}>$9.99/mes</Text>
       </View>
 
-      {/* Beneficios */}
       <Text style={styles.benefitsTitle}>Beneficios</Text>
 
       <View style={styles.benefitsList}>
         <View style={styles.benefitItem}>
-          <Ionicons name="checkmark" size={20} color="#4CAF50" />
-          <Text style={styles.benefitText}>Acceso anticipado a entradas</Text>
+          <Ionicons name="checkmark" size={16} color="#fff" />
+          <Text style={styles.benefitText}>Promociones exclusivas</Text>
         </View>
-
         <View style={styles.benefitItem}>
-          <Ionicons name="checkmark" size={20} color="#4CAF50" />
+          <Ionicons name="checkmark" size={16} color="#fff" />
           <Text style={styles.benefitText}>Descuentos especiales</Text>
         </View>
-
         <View style={styles.benefitItem}>
-          <Ionicons name="checkmark" size={20} color="#4CAF50" />
+          <Ionicons name="checkmark" size={16} color="#fff" />
           <Text style={styles.benefitText}>Coleccionables limitados</Text>
         </View>
       </View>
 
-      {/* Botón de comprar */}
-      <TouchableOpacity style={styles.buyButton} onPress={handleComprarPress}>
-        <Text style={styles.buyButtonText}>Comprar</Text>
-      </TouchableOpacity>
+      {suscripto && fechaRenovacion ? (
+        <>
+          <Text style={styles.renovacionTexto}>
+            Tu suscripción se renovará el {formatoFecha(fechaRenovacion)}
+          </Text>
+          <TouchableOpacity style={[styles.buyButton, { backgroundColor: '#888' }]} onPress={handleCancelarPress}>
+            <Text style={styles.buyButtonText}>Cancelar suscripción</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <TouchableOpacity style={styles.buyButton} onPress={() => router.push('/menu/carrito/CarritoSuscripcion')}>
+          <Text style={styles.buyButtonText}>Comprar</Text>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 };
@@ -68,87 +92,72 @@ const Suscripcion: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
-    paddingHorizontal: moderateScale(16),
+    backgroundColor: '#000',
+    padding: 16,
   },
   mainTitle: {
-    fontSize: moderateScale(24),
-    color: 'white',
+    color: '#fff',
+    fontSize: 22,
     fontWeight: 'bold',
-    textAlign: 'left',
-    marginBottom: verticalScale(30),
+    marginVertical: 16,
+    alignSelf: 'center'
   },
   subscriptionCard: {
-    backgroundColor: '#4a4a4a',
-    borderRadius: moderateScale(12),
-    padding: moderateScale(20),
-    marginBottom: verticalScale(30),
+    backgroundColor: '#1c1c1e',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   subscriptionTitle: {
-    fontSize: moderateScale(20),
-    color: 'white',
-    fontWeight: 'bold',
-    marginBottom: verticalScale(10),
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff'
   },
   price: {
-    fontSize: moderateScale(18),
-    color: 'white',
-    fontWeight: '600',
+    fontSize: 16,
+    marginTop: 8,
+    color: '#fff'
   },
   benefitsTitle: {
-    fontSize: moderateScale(22),
-    color: 'white',
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: verticalScale(20),
+    marginBottom: 12,
+    color: '#fff'
   },
   benefitsList: {
-    marginBottom: verticalScale(40),
+    marginBottom: 24,
+    gap: 8,
   },
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4a4a4a',
-    borderRadius: moderateScale(8),
-    padding: moderateScale(16),
-    marginBottom: verticalScale(12),
+    backgroundColor: '#1c1c1e',
+    padding: 10,
+    borderRadius: 10
   },
   benefitText: {
-    fontSize: moderateScale(16),
-    color: 'white',
-    marginLeft: moderateScale(12),
-    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#fff',
   },
   buyButton: {
-    backgroundColor: 'red',
-    borderRadius: moderateScale(8),
-    paddingVertical: verticalScale(16),
+    backgroundColor: '#a80000',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: verticalScale(40),
   },
   buyButtonText: {
-    fontSize: moderateScale(18),
-    color: 'white',
+    color: '#fff',
     fontWeight: 'bold',
+    fontSize: 16,
   },
-  bottomNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: moderateScale(40),
-    position: 'absolute',
-    bottom: verticalScale(30),
-    left: 0,
-    right: 0,
-  },
-  navIcon: {
-    padding: moderateScale(10),
-  },
-  recordButton: {
-    width: moderateScale(20),
-    height: moderateScale(20),
-    borderRadius: moderateScale(10),
-    backgroundColor: 'red',
-  },
+  renovacionTexto: {
+    fontSize: 14,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 12,
+  }
 });
 
 export default Suscripcion;
