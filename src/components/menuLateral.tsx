@@ -1,27 +1,25 @@
-import React, { useEffect, useState, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Dimensions,
+  AntDesign,
+  Entypo,
+  Feather,
+  Ionicons,
+  MaterialIcons
+} from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import {
   Alert,
   Animated,
+  Dimensions,
   Modal,
-  KeyboardAvoidingView,
-  Platform
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  Ionicons,
-  MaterialIcons,
-  Entypo,
-  AntDesign,
-  Feather
-} from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { moderateScale, verticalScale, scale } from 'react-native-size-matters';
+import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 import ConfirmLogout from './ConfirmLogout';
 import SessionClosed from './SessionClosed';
 
@@ -223,7 +221,16 @@ useEffect(() => {
           </View>
 
           <MenuItem icon="percent" text="Cupones" />
-          <MenuItem icon="shopping-bag" text="Mis Compras" />
+          <TouchableOpacity
+  style={styles.menuItem}
+  onPress={() => {
+    onClose();
+    router.push('/menu/MisCompras');
+  }}
+>
+  <AntDesign name="shoppingcart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+  <Text style={styles.menuItemText}>Mis Compras</Text>
+</TouchableOpacity>
 
           {/* Sección de ubicación */}
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/Ubicacion')}>
@@ -246,8 +253,26 @@ useEffect(() => {
           <View style={styles.separator} />
 
           <MenuItem icon="info" text="Sobre Nosotros" library="Feather" />
-          <MenuItem icon="person" text="Mi Cuenta" library="Ionicons" />
-          <MenuItem icon="settings" text="Configuración" library="Feather" />
+          <TouchableOpacity
+  style={styles.menuItem}
+  onPress={() => {
+    onClose(); // Cierra el menú lateral
+    router.push('/menu/MiCuenta');
+  }}
+>
+  <Ionicons name="person" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+  <Text style={styles.menuItemText}>Mi Cuenta</Text>
+</TouchableOpacity>
+          <TouchableOpacity
+  style={styles.menuItem}
+  onPress={() => {
+    onClose();
+    router.push('/menu/ConfiguracionApp');
+  }}
+>
+  <Feather name="settings" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+  <Text style={styles.menuItemText}>Configuración</Text>
+</TouchableOpacity>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogoutPress}>
             <View style={styles.menuItem}>

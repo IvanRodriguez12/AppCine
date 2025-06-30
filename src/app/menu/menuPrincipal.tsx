@@ -146,6 +146,7 @@ const MenuPrincipal: React.FC = () => {
         <Text style={styles.sectionTitle}>NOVEDADES / ANUNCIOS</Text>
         <Text style={styles.sectionSubText}>Últimas noticias y promociones</Text>
       </TouchableOpacity>
+
     </SafeAreaView>
   );
 };
@@ -289,6 +290,19 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: moderateScale(13),
     marginTop: verticalScale(4),
+  },
+  sectionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4a4a4a',
+    borderRadius: moderateScale(12),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(14),
+  },
+  sectionText: {
+    color: 'white',
+    fontSize: moderateScale(16),
+    marginLeft: moderateScale(8),
   },
 });
 
