@@ -7,7 +7,7 @@
             "objeto": "candyshop",
             "tipo": "fijo",
             "descuento": 10,
-            "vencimiento": "2025-06-01",
+            "vencimiento": "2025-08-01",
             "icono": "lollipop.png",
             "premium": false
         },

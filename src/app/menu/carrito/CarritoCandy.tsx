@@ -1,8 +1,10 @@
 import Header from '@/components/Header';
+import { useCarrito } from '@/context/CarritoContext';
+import cuponesData from '@/data/cupones.json';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -18,6 +20,7 @@ import {
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const STORAGE_KEY = 'metodos_pago';
+const COMPRAS_KEY = 'compras_usuario';
 
 interface PaymentMethod {
   id: string;
@@ -48,11 +51,14 @@ interface MetodoPago {
   numero: string;
   fecha: string;
   cvv: string;
+  type: 'card' | 'wallet';
 }
 
 const CarritoCandy: React.FC = () => {
   const { productos, total } = useLocalSearchParams();
   const router = useRouter();
+  const { state } = useCarrito();
+  const { limpiarCarrito } = useCarrito();
   
   const [selectedPayment, setSelectedPayment] = useState<string>('');
   const [cardData, setCardData] = useState<CardData>({
@@ -64,32 +70,43 @@ const CarritoCandy: React.FC = () => {
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
   const [metodosGuardados, setMetodosGuardados] = useState<MetodoPago[]>([]);
   const [metodoSeleccionado, setMetodoSeleccionado] = useState<number>(-1);
-  const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(false);
+  const [tarjetasGuardadas, setTarjetasGuardadas] = useState<MetodoPago[]>([]);
+  const [billeterasGuardadas, setBilleterasGuardadas] = useState<MetodoPago[]>([]);
+  const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(true);
+  const [codigoCupon, setCodigoCupon] = useState<string>('');
+  const [cuponAplicado, setCuponAplicado] = useState<any>(null);
+  const [descuentoAplicado, setDescuentoAplicado] = useState<number>(0);
+  const [suscripto, setSuscripto] = useState<boolean>(false);
 
-  // Parsear los productos del carrito
-  const productosCarrito: ProductoCarrito[] = productos ? JSON.parse(productos as string) : [];
+  const productosCarrito: ProductoCarrito[] = state.items;
 
   const paymentMethods: PaymentMethod[] = [
     { id: 'visa', name: 'Tarjeta de crédito/débito', icon: 'card', type: 'card' },
     { id: 'mercadopago', name: 'Billetera virtual', icon: 'wallet', type: 'wallet' }
   ];
 
-  // Cargar métodos de pago guardados al inicializar
   useEffect(() => {
     cargarMetodosGuardados();
+    verificarSuscripcion();
   }, []);
+
+  const verificarSuscripcion = async () => {
+    const estado = await AsyncStorage.getItem('estadoSuscripcion');
+    if (estado) {
+      const parsed = JSON.parse(estado);
+      setSuscripto(parsed.suscripto === true);
+    }
+  };
 
   const cargarMetodosGuardados = async () => {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEY);
       if (data) {
-        const metodos = JSON.parse(data);
+        const metodos: MetodoPago[] = JSON.parse(data);
         setMetodosGuardados(metodos);
         
-        // Si hay métodos guardados, mostrar la opción de seleccionarlos
-        if (metodos.length > 0) {
-          setMostrarMetodosGuardados(true);
-        }
+        setTarjetasGuardadas(metodos.filter(m => m.type === 'card'));
+        setBilleterasGuardadas(metodos.filter(m => m.type === 'wallet'));
       }
     } catch (error) {
       console.error('Error al cargar métodos guardados:', error);
@@ -97,16 +114,112 @@ const CarritoCandy: React.FC = () => {
   };
 
   const seleccionarMetodoGuardado = (index: number) => {
-    const metodo = metodosGuardados[index];
+    const metodo = selectedPayment === 'visa' ? tarjetasGuardadas[index] : billeterasGuardadas[index];
     setMetodoSeleccionado(index);
     
-    // Autocompletar los datos del formulario
     setCardData({
       number: metodo.numero,
       expiry: metodo.fecha,
       cvv: metodo.cvv,
       name: `${metodo.nombre} ${metodo.apellido}`
     });
+  };
+
+  const guardarCompra = async () => {
+    try {
+      const nuevaCompra = {
+        tipo: 'Productos Candy Shop',
+        productos: productosCarrito.map(p => ({
+          nombre: p.nombre,
+          cantidad: p.cantidad,
+          precio: p.precio,
+          tamanio: p.tamanio
+        })),
+        fecha: new Date().toISOString(),
+        precio: totalFinal,
+        metodo: selectedPayment === 'visa' ? 'Tarjeta' : 'Billetera',
+      };
+
+      const comprasPrevias = await AsyncStorage.getItem(COMPRAS_KEY);
+      const lista = comprasPrevias ? JSON.parse(comprasPrevias) : [];
+      lista.push(nuevaCompra);
+      await AsyncStorage.setItem(COMPRAS_KEY, JSON.stringify(lista));
+    } catch (error) {
+      console.error('Error guardando la compra:', error);
+    }
+  };
+
+  const validarCupon = async (cupon: any): Promise<{ valido: boolean; mensaje?: string }> => {
+    const fechaVencimiento = new Date(cupon.vencimiento);
+    if (fechaVencimiento < new Date()) {
+      return { valido: false, mensaje: 'El cupón ha expirado' };
+    }
+
+    if (cupon.objeto !== 'candyshop') {
+      return { valido: false, mensaje: 'Este cupón no es válido para productos de la Candy Shop' };
+    }
+
+    if (cupon.premium && !suscripto) {
+      return { valido: false, mensaje: 'Este cupón es solo para usuarios Premium' };
+    }
+
+    return { valido: true };
+  };
+
+  const calcularDescuento = (cupon: any): number => {
+    const subtotal = productosCarrito.reduce((acc, p) => acc + p.precio * p.cantidad, 0);
+    const totalCantidad = productosCarrito.reduce((acc, p) => acc + p.cantidad, 0);
+
+    switch (cupon.tipo) {
+      case 'fijo':
+        return Math.min(cupon.descuento || 0, subtotal);
+
+      case 'porcentaje':
+        return subtotal * (cupon.descuento / 100);
+
+      case '2x1': {
+        const gratis = Math.floor(totalCantidad / 2);
+        const precioUnitario = subtotal / totalCantidad;
+        return gratis * precioUnitario;
+      }
+
+      default:
+        return 0;
+    }
+  };
+
+  const aplicarCupon = async () => {
+    if (!codigoCupon.trim()) {
+      Alert.alert('Error', 'Ingrese un código de cupón');
+      return;
+    }
+
+    const cupon = cuponesData.cupones.find(
+      c => c.objeto === 'candyshop' && c.codigo.toUpperCase() === codigoCupon.trim().toUpperCase()
+    );
+
+    if (!cupon) {
+      Alert.alert('Error', 'Cupón inválido');
+      return;
+    }
+
+    const validacion = await validarCupon(cupon);
+    if (!validacion.valido) {
+      Alert.alert('Cupón inválido', validacion.mensaje || 'No se puede usar este cupón');
+      return;
+    }
+
+    const descuento = calcularDescuento(cupon);
+    setCuponAplicado(cupon);
+    setDescuentoAplicado(descuento);
+
+    Alert.alert('¡Cupón aplicado!', `${cupon.titulo}\nDescuento: $${descuento.toFixed(2)}`);
+  };
+
+  const removerCupon = () => {
+    setCuponAplicado(null);
+    setDescuentoAplicado(0);
+    setCodigoCupon('');
   };
 
   const usarNuevoMetodo = () => {
@@ -139,14 +252,12 @@ const CarritoCandy: React.FC = () => {
     if (selectedPayment === 'visa' || selectedPayment === 'mercadopago') {
       const { number, expiry, cvv, name } = cardData;
       
-      // Validar número de tarjeta (16 dígitos)
       const cardNumber = number.replace(/\s/g, '');
       if (cardNumber.length !== 16) {
         Alert.alert('Error', 'El número de tarjeta debe tener 16 dígitos');
         return false;
       }
 
-      // Validar fecha de expiración
       if (expiry.length !== 5) {
         Alert.alert('Error', 'Ingrese una fecha de expiración válida (MM/AA)');
         return false;
@@ -166,13 +277,11 @@ const CarritoCandy: React.FC = () => {
         return false;
       }
 
-      // Validar CVV
       if (cvv.length !== 3) {
         Alert.alert('Error', 'El CVV debe tener 3 dígitos');
         return false;
       }
 
-      // Validar nombre
       if (name.trim().length < 2) {
         Alert.alert('Error', 'Ingrese el nombre del titular');
         return false;
@@ -182,7 +291,7 @@ const CarritoCandy: React.FC = () => {
     return true;
   };
 
-  const handleFinalizarPago = (): void => {
+  const handleFinalizarPago = async (): Promise<void> => {
     if (!selectedPayment) {
       Alert.alert('Error', 'Seleccione un método de pago');
       return;
@@ -192,13 +301,14 @@ const CarritoCandy: React.FC = () => {
       return;
     }
 
-    // Mostrar popup de éxito
+    await guardarCompra();
+
+    limpiarCarrito();
+
     setShowSuccessModal(true);
     
-    // Timer para cerrar el modal después de 3 segundos
     setTimeout(() => {
       setShowSuccessModal(false);
-      // Navegar al menú principal
       setTimeout(() => {
         router.replace('menu/menuPrincipal');
       }, 200);
@@ -243,12 +353,14 @@ const CarritoCandy: React.FC = () => {
   );
 
   const renderMetodosGuardados = () => {
-    if (!mostrarMetodosGuardados || metodosGuardados.length === 0) return null;
+    const lista = selectedPayment === 'visa' ? tarjetasGuardadas : selectedPayment === 'mercadopago' ? billeterasGuardadas : [];
+    
+    if (!mostrarMetodosGuardados || lista.length === 0) return null;
 
     return (
       <View style={styles.metodosGuardadosContainer}>
         <Text style={styles.metodosGuardadosTitle}>MÉTODOS GUARDADOS</Text>
-        {metodosGuardados.map((metodo, index) => (
+        {lista.map((metodo, index) => (
           <TouchableOpacity
             key={index}
             style={[
@@ -297,10 +409,8 @@ const CarritoCandy: React.FC = () => {
           {selectedPayment === 'visa' ? 'DETALLES DE TARJETA' : 'DETALLES DE BILLETERA'}
         </Text>
         
-        {/* Mostrar métodos guardados si los hay */}
         {renderMetodosGuardados()}
         
-        {/* Mostrar formulario solo si no hay método seleccionado o si se eligió usar nuevo método */}
         {(metodosGuardados.length === 0 || metodoSeleccionado === -1) && (
           <>
             <TextInput
@@ -346,7 +456,6 @@ const CarritoCandy: React.FC = () => {
           </>
         )}
         
-        {/* Si hay un método seleccionado, mostrar los datos autocompletados (solo lectura) */}
         {metodoSeleccionado >= 0 && (
           <View style={styles.datosAutocompletados}>
             <Text style={styles.datosAutocompletadosTitle}>Datos seleccionados:</Text>
@@ -365,15 +474,15 @@ const CarritoCandy: React.FC = () => {
     );
   };
 
-  // Calcular subtotal y total con servicio
   const subtotal = parseFloat(total as string) || 0;
   const servicioFee = 1.50;
   const totalFinal = subtotal + servicioFee;
+  const totalConCupon = subtotal - descuentoAplicado + servicioFee;
 
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title="Candy Shop"
+        title="CineApp"
         onBack={() => router.back()}
       />
 
@@ -383,7 +492,6 @@ const CarritoCandy: React.FC = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Productos del carrito */}
         <View style={styles.carritoCard}>
           <Text style={styles.carritoTitle}>TUS PRODUCTOS</Text>
           {productosCarrito.map((producto, index) => (
@@ -400,8 +508,50 @@ const CarritoCandy: React.FC = () => {
             </View>
           ))}
         </View>
+        <View style={styles.cuponSection}>
+          <Text style={styles.cuponSectionTitle}>CÓDIGO DE CUPÓN</Text>
+          
+          {!cuponAplicado ? (
+            <View style={styles.cuponCard}>
+              <View style={styles.cuponInputContainer}>
+                <TextInput
+                  style={styles.cuponInput}
+                  placeholder="Ingrese código de cupón"
+                  placeholderTextColor="#999"
+                  value={codigoCupon}
+                  onChangeText={setCodigoCupon}
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity onPress={aplicarCupon} style={styles.aplicarButton}>
+                  <Text style={styles.aplicarButtonText}>APLICAR</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.cuponAplicadoCard}>
+              <View style={styles.cuponAplicadoHeader}>
+                <View style={styles.cuponAplicadoInfo}>
+                  <View style={styles.cuponCheckContainer}>
+                    <Text style={styles.cuponCheckIcon}>✓</Text>
+                  </View>
+                  <View style={styles.cuponTextos}>
+                    <Text style={styles.cuponAplicadoTitulo}>{cuponAplicado.titulo}</Text>
+                    <Text style={styles.cuponAplicadoDescripcion}>
+                      Promoción en {cuponAplicado.objeto === 'candyshop' ? 'Candy Shop' : 'entradas'}
+                    </Text>
+                    <Text style={styles.cuponAplicadoDescuento}>
+                      Descuento: ${descuentoAplicado.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={removerCupon} style={styles.removerCuponButton}>
+                  <Text style={styles.removerCuponIcon}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
 
-        {/* Método de pago */}
         <Text style={styles.sectionTitle}>MÉTODO DE PAGO</Text>
         
         <View style={styles.paymentMethods}>
@@ -410,7 +560,6 @@ const CarritoCandy: React.FC = () => {
 
         {renderCardForm()}
 
-        {/* Resumen */}
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>RESUMEN</Text>
           <View style={styles.summaryRow}>
@@ -421,13 +570,22 @@ const CarritoCandy: React.FC = () => {
             <Text style={styles.summaryText}>Servicio</Text>
             <Text style={styles.summaryPrice}>${servicioFee.toFixed(2)}</Text>
           </View>
+          {cuponAplicado && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryText, { color: '#4CAF50' }]}>
+                Descuento ({cuponAplicado.codigo})
+              </Text>
+              <Text style={[styles.summaryPrice, { color: '#4CAF50' }]}>
+                -${descuentoAplicado.toFixed(2)}
+              </Text>
+            </View>
+          )}
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalText}>Total</Text>
-            <Text style={styles.totalPrice}>${totalFinal.toFixed(2)}</Text>
+            <Text style={styles.totalPrice}>${totalConCupon.toFixed(2)}</Text>
           </View>
         </View>
 
-        {/* Botón finalizar */}
         <TouchableOpacity
           style={styles.finalizarButton}
           onPress={handleFinalizarPago}
@@ -436,7 +594,6 @@ const CarritoCandy: React.FC = () => {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal de éxito */}
       <Modal
         visible={showSuccessModal}
         transparent={true}
@@ -477,17 +634,125 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: verticalScale(30),
   },
+  carritoTitle: {
+    fontSize: moderateScale(18),
+    color: 'white',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(15),
+  },
   carritoCard: {
     backgroundColor: '#2a2a2a',
     borderRadius: moderateScale(12),
     padding: moderateScale(16),
     marginBottom: verticalScale(25),
   },
-  carritoTitle: {
+  cuponSection: {
+    marginBottom: verticalScale(20),
+  },
+  cuponSectionTitle: {
     fontSize: moderateScale(16),
     color: 'white',
     fontWeight: 'bold',
-    marginBottom: verticalScale(15),
+    marginBottom: verticalScale(12),
+    letterSpacing: 0.5,
+  },
+  cuponCard: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
+  },
+  cuponInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(12),
+  },
+  cuponInput: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(14),
+    fontSize: moderateScale(16),
+    color: 'white',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  aplicarButton: {
+    backgroundColor: '#FF0000',
+    borderRadius: moderateScale(8),
+    paddingVertical: verticalScale(14),
+    paddingHorizontal: moderateScale(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: moderateScale(90),
+  },
+  aplicarButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: moderateScale(14),
+    letterSpacing: 0.5,
+  },
+  cuponAplicadoCard: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  cuponAplicadoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cuponAplicadoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cuponCheckContainer: {
+    width: moderateScale(24),
+    height: moderateScale(24),
+    backgroundColor: '#4CAF50',
+    borderRadius: moderateScale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: moderateScale(12),
+  },
+  cuponCheckIcon: {
+    color: 'white',
+    fontSize: moderateScale(14),
+    fontWeight: 'bold',
+  },
+  cuponTextos: {
+    flex: 1,
+  },
+  cuponAplicadoTitulo: {
+    fontSize: moderateScale(16),
+    color: 'white',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(2),
+  },
+  cuponAplicadoDescripcion: {
+    fontSize: moderateScale(13),
+    color: '#ccc',
+    marginBottom: verticalScale(4),
+  },
+  cuponAplicadoDescuento: {
+    fontSize: moderateScale(14),
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  removerCuponButton: {
+    width: moderateScale(28),
+    height: moderateScale(28),
+    backgroundColor: '#FF4444',
+    borderRadius: moderateScale(14),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removerCuponIcon: {
+    color: 'white',
+    fontSize: moderateScale(16),
+    fontWeight: 'bold',
   },
   productoItem: {
     flexDirection: 'row',
@@ -590,7 +855,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: verticalScale(15),
   },
-  // Nuevos estilos para métodos guardados
   metodosGuardadosContainer: {
     marginBottom: verticalScale(20),
   },
@@ -725,7 +989,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-  // Estilos del modal de éxito
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',

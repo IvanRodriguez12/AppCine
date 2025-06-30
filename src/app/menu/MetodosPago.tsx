@@ -5,8 +5,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const STORAGE_KEY = 'metodos_pago';
-const PLAN_KEY = 'plan_usuario'; 
+const STORAGE_KEY = 'metodos_pago'; 
 const SUSCRIPCION_KEY = 'estadoSuscripcion';
 
 type MetodoPago = {
@@ -15,6 +14,7 @@ type MetodoPago = {
   numero: string;
   fecha: string;
   cvv: string;
+  type: 'card' | 'wallet';
 };
 
 type EstadoSuscripcion = {
@@ -30,6 +30,7 @@ const MetodosPago = () => {
     numero: '',
     fecha: '',
     cvv: '',
+    type: 'card',
   });
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [plan, setPlan] = useState<'comun' | 'premium'>('comun');
@@ -42,7 +43,6 @@ const MetodosPago = () => {
 
   useEffect(() => {
     cargarMetodos();
-    cargarPlan();
     cargarEstadoSuscripcion();
   }, []);
 
@@ -63,29 +63,17 @@ const MetodosPago = () => {
     }
   };
 
-  const cargarPlan = async () => {
-    try {
-      const data = await AsyncStorage.getItem(PLAN_KEY);
-      if (data === 'premium' || data === 'comun') setPlan(data);
-    } catch (error) {
-      console.error('Error al cargar plan:', error);
-    }
-  };
-
   const cargarEstadoSuscripcion = async () => {
     try {
       const data = await AsyncStorage.getItem(SUSCRIPCION_KEY);
-      if (data) {
-        const estado = JSON.parse(data);
-        setEstadoSuscripcion(estado);
-      }
+      if (data) setEstadoSuscripcion(JSON.parse(data));
     } catch (error) {
       console.error('Error al cargar estado de suscripción:', error);
     }
   };
 
   const mejorarPlan = async () => {
-    router.push('/menu/carrito/CarritoSuscripcion');
+    router.push('/menu/Suscripcion');
   };
 
   const cancelarPlan = async () => {
@@ -98,13 +86,11 @@ const MetodosPago = () => {
           text: 'Sí, cancelar',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.setItem(PLAN_KEY, 'comun');
             await AsyncStorage.removeItem(SUSCRIPCION_KEY);
-            setPlan('comun');
             setEstadoSuscripcion(null);
             Alert.alert('Plan cancelado', 'Has vuelto al plan común.');
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -221,7 +207,7 @@ const MetodosPago = () => {
   };
 
   const resetForm = () => {
-    setForm({ nombre: '', apellido: '', numero: '', fecha: '', cvv: '' });
+    setForm({ nombre: '', apellido: '', numero: '', fecha: '', cvv: '', type: 'card' });
     setMostrarFormulario(false);
     setMetodoAEditar(-1);
   };
@@ -242,6 +228,7 @@ const MetodosPago = () => {
           {`**** **** **** ${item.numero.slice(-4)}`}
         </Text>
         <Text style={styles.text}>Venc: {item.fecha} | CVV: ***</Text>
+        <Text style={styles.text}>Tipo: {item.type === 'card' ? 'Tarjeta' : 'Billetera Virtual'}</Text>
       </View>
       <View style={styles.cardActions}>
         <TouchableOpacity
@@ -267,23 +254,20 @@ const MetodosPago = () => {
       {/* Apartado de plan actual */}
       <View style={styles.planContainer}>
         <Text style={styles.planLabel}>Plan actual:</Text>
-        <Text style={[styles.planText, plan === 'premium' && { color: '#FFD700' }]}>
-          {plan === 'premium' ? 'Premium' : 'Común'}
+        <Text style={[styles.planText, estadoSuscripcion?.suscripto && { color: '#FFD700' }]}>
+          {estadoSuscripcion?.suscripto ? 'Premium' : 'Común'}
         </Text>
         
-        {estadoSuscripcion?.suscripto && (
-          <Text style={styles.renovacionText}>
-            Renovación: {obtenerFechaRenovacion()}
-          </Text>
-        )}
-        
-        {plan === 'comun' ? (
+        {estadoSuscripcion?.suscripto ? (
+          <>
+            <Text style={styles.renovacionText}>Renovación: {obtenerFechaRenovacion()}</Text>
+            <TouchableOpacity style={[styles.planBtn, { backgroundColor: '#444' }]} onPress={cancelarPlan}>
+              <Text style={styles.planBtnText}>Cancelar Suscripción</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
           <TouchableOpacity style={styles.planBtn} onPress={mejorarPlan}>
             <Text style={styles.planBtnText}>Mejorar a Premium</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={[styles.planBtn, { backgroundColor: '#444' }]} onPress={cancelarPlan}>
-            <Text style={styles.planBtnText}>Cancelar Suscripción</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -304,70 +288,94 @@ const MetodosPago = () => {
         }
       />
 
+      
       {mostrarFormulario && (
-        <View style={styles.formulario}>
-          <Text style={styles.formTitle}>
-            {metodoAEditar >= 0 ? 'Editar método de pago' : 'Nuevo método de pago'}
-          </Text>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Nombre"
-            placeholderTextColor="#888"
-            value={form.nombre}
-            onChangeText={v => setForm(f => ({ ...f, nombre: v }))}
-            autoCapitalize="words"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Apellido"
-            placeholderTextColor="#888"
-            value={form.apellido}
-            onChangeText={v => setForm(f => ({ ...f, apellido: v }))}
-            autoCapitalize="words"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Número de tarjeta"
-            placeholderTextColor="#888"
-            value={form.numero}
-            onChangeText={v => setForm(f => ({ ...f, numero: formatCardNumber(v) }))}
-            keyboardType="numeric"
-            maxLength={19}
-          />
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="MM/AA"
-              placeholderTextColor="#888"
-              value={form.fecha}
-              onChangeText={v => setForm(f => ({ ...f, fecha: formatExpiry(v) }))}
-              keyboardType="numeric"
-              maxLength={5}
-            />
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="CVV"
-              placeholderTextColor="#888"
-              value={form.cvv}
-              onChangeText={v => setForm(f => ({ ...f, cvv: v.replace(/[^0-9]/g, '') }))}
-              keyboardType="numeric"
-              maxLength={3}
-              secureTextEntry
-            />
+        <>
+          <View style={styles.selectorTipo}>
+            <TouchableOpacity
+              style={[
+                styles.tipoBtn,
+                form.type === 'card' && styles.tipoBtnActivo,
+              ]}
+              onPress={() => setForm({ ...form, type: 'card' })}
+            >
+              <Text style={styles.tipoBtnText}>Tarjeta de Crédito/Débito</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tipoBtn,
+                form.type === 'wallet' && styles.tipoBtnActivo,
+              ]}
+              onPress={() => setForm({ ...form, type: 'wallet' })}
+            >
+              <Text style={styles.tipoBtnText}>Billetera Virtual</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.btn} onPress={agregarMetodo}>
-            <Text style={styles.btnText}>
-              {metodoAEditar >= 0 ? 'Actualizar tarjeta' : 'Guardar tarjeta'}
+
+          <View style={styles.formulario}>
+            <Text style={styles.formTitle}>
+              {metodoAEditar >= 0 ? 'Editar método de pago' : 'Nuevo método de pago'}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.btn, { backgroundColor: '#444', marginTop: 10 }]}
-            onPress={resetForm}
-          >
-            <Text style={styles.btnText}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre"
+              placeholderTextColor="#888"
+              value={form.nombre}
+              onChangeText={v => setForm(f => ({ ...f, nombre: v }))}
+              autoCapitalize="words"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Apellido"
+              placeholderTextColor="#888"
+              value={form.apellido}
+              onChangeText={v => setForm(f => ({ ...f, apellido: v }))}
+              autoCapitalize="words"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Número de tarjeta"
+              placeholderTextColor="#888"
+              value={form.numero}
+              onChangeText={v => setForm(f => ({ ...f, numero: formatCardNumber(v) }))}
+              keyboardType="numeric"
+              maxLength={19}
+            />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="MM/AA"
+                placeholderTextColor="#888"
+                value={form.fecha}
+                onChangeText={v => setForm(f => ({ ...f, fecha: formatExpiry(v) }))}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="CVV"
+                placeholderTextColor="#888"
+                value={form.cvv}
+                onChangeText={v => setForm(f => ({ ...f, cvv: v.replace(/[^0-9]/g, '') }))}
+                keyboardType="numeric"
+                maxLength={3}
+                secureTextEntry
+              />
+            </View>
+            <TouchableOpacity style={styles.btn} onPress={agregarMetodo}>
+              <Text style={styles.btnText}>
+                {metodoAEditar >= 0 ? 'Actualizar tarjeta' : 'Guardar tarjeta'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, { backgroundColor: '#444', marginTop: 10 }]}
+              onPress={resetForm}
+            >
+              <Text style={styles.btnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </>
       )}
 
       {/* Si hay métodos y no se muestra el formulario, muestra el botón abajo */}
@@ -409,7 +417,6 @@ const MetodosPago = () => {
     </SafeAreaView>
   );
 };
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: 'black', padding: 24 },
   planContainer: {
@@ -477,6 +484,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 60,
+  },
+  selectorTipo: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  tipoBtn: {
+    backgroundColor: '#333',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  tipoBtnActivo: {
+    backgroundColor: '#d32f2f',
+  },
+  tipoBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
   formulario: {
     marginTop: 20,

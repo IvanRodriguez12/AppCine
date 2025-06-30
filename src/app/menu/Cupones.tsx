@@ -4,7 +4,7 @@ import { getIcono } from '@/utils/getIcono';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Cupon {
   codigo: string;
@@ -34,26 +34,28 @@ const Cupones = () => {
   }, []);
 
   return (
-    <ScrollView style={styles.container}>
-      <Header title="Cupones" onBack={() => router.back()} />
-      <Text style={styles.titulo}>Cupones</Text>
-      {cupones.length === 0 ? (
-        <Text style={styles.sinCupones}>No tenés cupones disponibles por el momento.</Text>
-      ) : cupones.map((c, index) => (
-        <TouchableOpacity
-          key={index}
-          onPress={() => router.push(`/menu/cupones/${c.codigo}`)}
-          style={styles.cupon}
-        >
-          <Image source={getIcono(c.icono)} style={styles.icono} resizeMode="contain" />
-          <View style={styles.textoContainer}>
-            <Text style={styles.tituloCupon}>{c.titulo}</Text>
-            <Text>{c.descripcion}</Text>
-            <Text style={styles.vencimiento}>Válido hasta el {c.vencimiento}</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+      <Header title="CineApp" onBack={() => router.back()} />
+      <ScrollView style={styles.container}>
+        <Text style={styles.titulo}>Cupones</Text>
+        {cupones.length === 0 ? (
+          <Text style={styles.sinCupones}>No tenés cupones disponibles por el momento.</Text>
+        ) : cupones.map((c, index) => (
+          <TouchableOpacity
+            key={index}
+            onPress={() => router.push(`/menu/cupones/${c.codigo}`)}
+            style={styles.cupon}
+          >
+            <Image source={getIcono(c.icono)} style={styles.icono} resizeMode="contain" />
+            <View style={styles.textoContainer}>
+              <Text style={styles.tituloCupon}>{c.titulo}</Text>
+              <Text>{c.descripcion}</Text>
+              <Text style={styles.vencimiento}>Válido hasta el {c.vencimiento}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 

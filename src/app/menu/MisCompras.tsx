@@ -22,7 +22,7 @@ const MisCompras = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Mis compras" onBack={() => router.back()} />
+      <Header title="CineApp" onBack={() => router.back()} />
       <Text style={styles.title}>Mis compras</Text>
       {compras.length === 0 ? (
         <Text style={styles.emptyText}>No tienes compras registradas.</Text>
@@ -32,8 +32,47 @@ const MisCompras = () => {
           keyExtractor={(_, idx) => idx.toString()}
           renderItem={({ item }) => (
             <View style={styles.compraCard}>
-              <Text style={styles.compraText}>{item.descripcion || 'Compra realizada'}</Text>
-              <Text style={styles.compraTextSecundario}>{item.fecha || ''}</Text>
+              <Text style={styles.compraText}>{item.tipo || 'Compra realizada'}</Text>
+
+              {item.tipo === 'Productos Candy Shop' && item.productos && (
+                <>
+                  {item.productos.map((prod: any, idx: number) => (
+                    <Text key={idx} style={styles.compraTextSecundario}>
+                      • {prod.nombre} ({prod.tamanio}) x{prod.cantidad}
+                    </Text>
+                  ))}
+                </>
+              )}
+
+              {item.tipo === 'Entrada de cine' && (
+                <>
+                  <Text style={styles.compraTextSecundario}>
+                    Película: {item.pelicula}
+                  </Text>
+                  <Text style={styles.compraTextSecundario}>
+                    Asientos: {item.asientos}
+                  </Text>
+                  <Text style={styles.compraTextSecundario}>
+                    Fecha: {item.fecha} - Hora: {item.hora}
+                  </Text>
+                </>
+              )}
+
+              {item.tipo === 'Suscripción Premium' && (
+                <Text style={styles.compraTextSecundario}>
+                  Suscripción mensual activa
+                </Text>
+              )}
+
+              <Text style={styles.compraTextSecundario}>
+                Fecha de compra: {new Date(item.fecha || item.fechaCompra).toLocaleDateString()}
+              </Text>
+              <Text style={styles.compraTextSecundario}>
+                Método: {item.metodo}
+              </Text>
+              <Text style={styles.compraTextSecundario}>
+                Total: ${item.precio?.toFixed(2)}
+              </Text>
             </View>
           )}
         />

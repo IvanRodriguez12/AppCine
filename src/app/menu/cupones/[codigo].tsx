@@ -3,7 +3,7 @@ import cuponesData from '@/data/cupones.json';
 import { getIcono } from '@/utils/getIcono';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -30,41 +30,43 @@ const CuponDetalle = () => {
   };
 
   return (
-    <View style={styles.background}>
-      <Header title="Cupon" onBack={() => router.back()} />
-      <View style={styles.card}>
-        <View style={styles.cabecera}>
-          <Image source={getIcono(cupon.icono)} style={styles.icono} />
-          <View>
-            <Text style={styles.titulo}>{cupon.titulo}</Text>
-            <Text style={styles.subtitulo}>{cupon.descripcion}</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+        <Header title="CineApp" onBack={() => router.back()} />
+        <View style={styles.background}>
+          <View style={styles.card}>
+            <View style={styles.cabecera}>
+              <Image source={getIcono(cupon.icono)} style={styles.icono} />
+              <View>
+                <Text style={styles.titulo}>{cupon.titulo}</Text>
+                <Text style={styles.subtitulo}>{cupon.descripcion}</Text>
+              </View>
+            </View>
+
+            <View style={styles.descripcionArea}>
+              <Text style={styles.descripcionGruesa}>
+                {cupon.tipo === 'porcentaje'
+                  ? `${cupon.descuento}% de descuento en ${cupon.objeto === 'ticket' ? 'entradas' : 'cualquier combo'}`
+                  : cupon.tipo === 'fijo'
+                  ? `$${cupon.descuento} de descuento`
+                  : 'Promoción 2x1 en entradas'}
+              </Text>
+              <Text style={styles.puntos}>• Canjeable en cualquiera de nuestros cines</Text>
+              <Text style={styles.puntos}>• No válido con otras promociones</Text>
+              <Text style={styles.puntos}>• Sin valor en efectivo</Text>
+            </View>
+
+            <View style={styles.codigoContenedor}>
+              <Text style={styles.codigoTexto}>{cupon.codigo}</Text>
+            </View>
+
+            <Text style={styles.vencimiento}>Válido hasta el {cupon.vencimiento}</Text>
           </View>
+
+          <TouchableOpacity style={styles.botonUsar} onPress={handleUsarCupon}>
+            <Text style={styles.botonTexto}>¡Utilizalo ya!</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.descripcionArea}>
-          <Text style={styles.descripcionGruesa}>
-            {cupon.tipo === 'porcentaje'
-              ? `${cupon.descuento}% de descuento en ${cupon.objeto === 'ticket' ? 'entradas' : 'cualquier combo'}`
-              : cupon.tipo === 'fijo'
-              ? `$${cupon.descuento} de descuento`
-              : 'Promoción 2x1 en entradas'}
-          </Text>
-          <Text style={styles.puntos}>• Canjeable en cualquiera de nuestros cines</Text>
-          <Text style={styles.puntos}>• No válido con otras promociones</Text>
-          <Text style={styles.puntos}>• Sin valor en efectivo</Text>
-        </View>
-
-        <View style={styles.codigoContenedor}>
-          <Text style={styles.codigoTexto}>{cupon.codigo}</Text>
-        </View>
-
-        <Text style={styles.vencimiento}>Válido hasta el {cupon.vencimiento}</Text>
-      </View>
-
-      <TouchableOpacity style={styles.botonUsar} onPress={handleUsarCupon}>
-        <Text style={styles.botonTexto}>¡Utilizalo ya!</Text>
-      </TouchableOpacity>
-    </View>
+      </SafeAreaView>
   );
 };
 

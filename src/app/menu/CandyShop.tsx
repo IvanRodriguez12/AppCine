@@ -1,4 +1,5 @@
 import Header from '@/components/Header';
+import { useCarrito } from '@/context/CarritoContext';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
@@ -86,8 +87,18 @@ const TAMANIOS = ['pequeño', 'mediano', 'grande'];
 const CandyShop = () => {
   const insets = useSafeAreaInsets();
   const [categoria, setCategoria] = useState('todos');
-  const [carrito, setCarrito] = useState<any[]>([]);
   const [tamaniosSeleccionados, setTamaniosSeleccionados] = useState<{ [key: string]: string }>({});
+  
+  const {
+    state: { items: carrito },
+    agregarItem,
+    incrementarCantidad,
+    decrementarCantidad,
+    getProductKey,
+    getItemByKey,
+    getTotalItems,
+    getTotalPrecio,
+  } = useCarrito();
 
   const filtrarProductos = () => {
     if (categoria === 'todos') return PRODUCTOS;
@@ -103,6 +114,15 @@ const CandyShop = () => {
     return Object.keys(producto.precios).length > 1;
   };
 
+  const getProductoEnCarrito = (producto: any) => {
+    const tamanio = tieneTamanios(producto)
+      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      : 'único';
+    
+    const productKey = getProductKey(producto, tamanio);
+    return getItemByKey(productKey);
+  };
+
   const agregarAlCarrito = (producto: any) => {
     const tamanio = tieneTamanios(producto)
       ? (tamaniosSeleccionados[producto.id] || 'mediano')
@@ -110,17 +130,31 @@ const CandyShop = () => {
     
     const precio = producto.precios[tamanio];
     
-    setCarrito(prev => [...prev, { 
-      ...producto, 
+    agregarItem({
+      ...producto,
       tamanio,
       precio,
       cantidad: 1
-    }]);
+    });
   };
 
-  const totalCarrito = carrito.reduce((acc, item) => {
-    return acc + (item.precio || 0);
-  }, 0);
+  const handleIncrementarCantidad = (producto: any) => {
+    const tamanio = tieneTamanios(producto)
+      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      : 'único';
+    
+    const productKey = getProductKey(producto, tamanio);
+    incrementarCantidad(productKey);
+  };
+
+  const handleDecrementarCantidad = (producto: any) => {
+    const tamanio = tieneTamanios(producto)
+      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      : 'único';
+    
+    const productKey = getProductKey(producto, tamanio);
+    decrementarCantidad(productKey);
+  };
 
   const handleIrAlCarrito = () => {
     if (carrito.length === 0) {
@@ -130,16 +164,12 @@ const CandyShop = () => {
 
     router.push({
       pathname: 'menu/carrito/CarritoCandy',
-      params: {
-        productos: JSON.stringify(carrito),
-        total: totalCarrito.toFixed(2)
-      }
     });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Candy Shop" onBack={() => {router.back()}} />
+      <Header title="CineApp" onBack={() => {router.back()}} />
       <View style={styles.filtrosRow}>
         {CATEGORIAS.map(cat => (
           <TouchableOpacity
@@ -165,7 +195,7 @@ const CandyShop = () => {
         keyExtractor={item => item.id}
         contentContainerStyle={[
           styles.lista,
-          { paddingBottom: 100 + insets.bottom }, // Ajusta el padding inferior
+          { paddingBottom: 100 + insets.bottom },
         ]}
         renderItem={({ item }) => {
           const tieneTamanios = Object.keys(item.precios).length > 1;
@@ -174,6 +204,7 @@ const CandyShop = () => {
             : 'único';
 
           const precio = (item.precios as any)[tamanioSeleccionado];
+          const productoEnCarrito = getProductoEnCarrito(item);
 
           return (
             <View style={styles.card}>
@@ -181,7 +212,6 @@ const CandyShop = () => {
               <View style={styles.info}>
                 <Text style={styles.nombre}>{item.nombre}</Text>
 
-                {/* Solo muestra botones de tamaño si hay más de uno */}
                 {tieneTamanios && (
                   <View style={styles.tamaniosRow}>
                     {TAMANIOS.map(tam => (
@@ -206,24 +236,45 @@ const CandyShop = () => {
 
                 <Text style={styles.precio}>${precio} USD</Text>
 
-                <TouchableOpacity
-                  style={styles.agregarBtn}
-                  onPress={() => agregarAlCarrito(item)}
-                >
-                  <Ionicons name="cart" size={18} color="white" />
-                  <Text style={styles.agregarBtnText}>Agregar</Text>
-                </TouchableOpacity>
+                {!productoEnCarrito ? (
+                  <TouchableOpacity
+                    style={styles.agregarBtn}
+                    onPress={() => agregarAlCarrito(item)}
+                  >
+                    <Ionicons name="cart" size={18} color="white" />
+                    <Text style={styles.agregarBtnText}>Agregar</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.cantidadControles}>
+                    <TouchableOpacity
+                      style={styles.cantidadBtn}
+                      onPress={() => handleDecrementarCantidad(item)}
+                    >
+                      <Ionicons name="remove" size={16} color="white" />
+                    </TouchableOpacity>
+                    
+                    <Text style={styles.cantidadText}>
+                      {productoEnCarrito.cantidad}
+                    </Text>
+                    
+                    <TouchableOpacity
+                      style={styles.cantidadBtn}
+                      onPress={() => handleIncrementarCantidad(item)}
+                    >
+                      <Ionicons name="add" size={16} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </View>
           );
         }}
       />
 
-      {/* Carrito */}
       <View style={[styles.carritoBar, { paddingBottom: insets.bottom }]}>
         <FontAwesome5 name="shopping-cart" size={22} color="white" />
         <Text style={styles.carritoText}>
-          {carrito.length} producto(s) - Total: ${totalCarrito.toFixed(2)}
+          {getTotalItems()} producto(s) - Total: ${getTotalPrecio().toFixed(2)}
         </Text>
         <TouchableOpacity 
           style={styles.pagarBtn}
@@ -332,6 +383,30 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     marginLeft: 6,
+  },
+  cantidadControles: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    backgroundColor: '#444',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  cantidadBtn: {
+    backgroundColor: 'red',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cantidadText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    paddingHorizontal: 16,
+    minWidth: 40,
+    textAlign: 'center',
   },
   carritoBar: {
     position: 'absolute',

@@ -1,6 +1,7 @@
-import { TMDB_API_KEY } from '@env';
 import Header from '@/components/Header';
+import cuponesData from '@/data/cupones.json';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -18,10 +19,24 @@ import {
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
+const TMDB_API_KEY = process.env.TMDB_API_KEY || '';
+
+const STORAGE_KEY = 'metodos_pago';
+const COMPRAS_KEY = 'compras_usuario';
+
 interface PaymentMethod {
   id: string;
   name: string;
   icon: string;
+  type: 'card' | 'wallet';
+}
+
+interface MetodoPago {
+  nombre: string;
+  apellido: string;
+  numero: string;
+  fecha: string;
+  cvv: string;
   type: 'card' | 'wallet';
 }
 
@@ -30,6 +45,18 @@ interface CardData {
   expiry: string;
   cvv: string;
   name: string;
+}
+
+interface Cupon {
+  codigo: string;
+  titulo: string;
+  descripcion: string;
+  objeto: 'ticket' | 'candyshop';
+  tipo: 'fijo' | 'porcentaje' | '2x1';
+  descuento: number | null;
+  vencimiento: string;
+  icono: string;
+  premium: boolean;
 }
 
 type Pelicula = {
@@ -49,13 +76,197 @@ const CarritoTickets: React.FC = () => {
     name: ''
   });
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [metodosGuardados, setMetodosGuardados] = useState<MetodoPago[]>([]);
+  const [metodoSeleccionado, setMetodoSeleccionado] = useState<number>(-1);
+  const [tarjetasGuardadas, setTarjetasGuardadas] = useState<MetodoPago[]>([]);
+  const [billeterasGuardadas, setBilleterasGuardadas] = useState<MetodoPago[]>([]);
+  const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(true);
   const [pelicula, setPelicula] = useState<Pelicula | null>(null);
   const [cargando, setCargando] = useState(true);
+
+  const [codigoCupon, setCodigoCupon] = useState<string>('');
+  const [cuponAplicado, setCuponAplicado] = useState<Cupon | null>(null);
+  const [descuentoAplicado, setDescuentoAplicado] = useState<number>(0);
+  const [cargandoCupon, setCargandoCupon] = useState<boolean>(false);
+
+  const cupones: Cupon[] = cuponesData.cupones.map((c) => ({
+    ...c,
+    objeto: c.objeto as 'ticket' | 'candyshop',
+    tipo: c.tipo as 'fijo' | 'porcentaje' | '2x1',
+  }));
 
   const paymentMethods: PaymentMethod[] = [
     { id: 'visa', name: 'Tarjeta de crédito/débito', icon: 'card', type: 'card' },
     { id: 'mercadopago', name: 'Billetera virtual', icon: 'wallet', type: 'wallet' }
   ];
+
+  useEffect(() => {
+    cargarMetodosGuardados();
+  }, []);
+
+  const cargarMetodosGuardados = async () => {
+    try {
+      const metodos = await AsyncStorage.getItem(STORAGE_KEY);
+      if (metodos) {
+        const lista: MetodoPago[] = JSON.parse(metodos);
+        setMetodosGuardados(lista);
+        setTarjetasGuardadas(lista.filter(m => m.type === 'card'));
+        setBilleterasGuardadas(lista.filter(m => m.type === 'wallet'));
+      }
+    } catch (error) {
+      console.error('Error al cargar métodos guardados:', error);
+    }
+  };
+
+  const validarCupon = async (cupon: Cupon): Promise<{ valido: boolean; mensaje?: string }> => {
+    const fechaVencimiento = new Date(cupon.vencimiento);
+    const fechaActual = new Date();
+
+    if (fechaVencimiento < fechaActual) {
+      return { valido: false, mensaje: 'El cupón ha expirado' };
+    }
+
+    if (cupon.objeto !== 'ticket') {
+      return { valido: false, mensaje: 'Este cupón no es válido para entradas de cine' };
+    }
+
+    if (cupon.premium) {
+      try {
+        const estado = await AsyncStorage.getItem('estadoSuscripcion');
+        const esPremium = estado ? JSON.parse(estado).suscripto === true : false;
+        if (!esPremium) {
+          return { valido: false, mensaje: 'Este cupón es solo para usuarios Premium' };
+        }
+      } catch {
+        return { valido: false, mensaje: 'Error al verificar suscripción del usuario' };
+      }
+    }
+
+    if (cupon.tipo === '2x1') {
+      const cantidadAsientos = asientos?.toString().split(',').length || 0;
+      if (cantidadAsientos < 2) {
+        return { valido: false, mensaje: 'Debes seleccionar al menos 2 asientos para usar este cupón' };
+      }
+    }
+
+    return { valido: true };
+  };
+
+  const calcularDescuento = (cupon: Cupon, subtotal: number): number => {
+    switch (cupon.tipo) {
+      case 'fijo':
+        return Math.min(cupon.descuento || 0, subtotal);
+
+      case 'porcentaje':
+        return (subtotal * (cupon.descuento || 0)) / 100;
+
+      case '2x1': {
+        const cantidadAsientos = asientos?.toString().split(',').length || 0;
+        if (cantidadAsientos < 2) return 0;
+        const entradasGratis = Math.floor(cantidadAsientos / 2);
+        const precioUnitario = subtotal / cantidadAsientos;
+        return precioUnitario * entradasGratis;
+      }
+
+      default:
+        return 0;
+    }
+  };
+
+  const aplicarCupon = async () => {
+    if (!codigoCupon.trim()) {
+      Alert.alert('Error', 'Ingrese un código de cupón');
+      return;
+    }
+
+    setCargandoCupon(true);
+
+    try {
+      const cupon = cupones.find(c => c.codigo.toLowerCase() === codigoCupon.trim().toLowerCase());
+      
+      if (!cupon) {
+        Alert.alert('Error', 'Código de cupón inválido');
+        setCargandoCupon(false);
+        return;
+      }
+
+      const validacion = await validarCupon(cupon);
+      if (!validacion.valido) {
+        Alert.alert('Error', validacion.mensaje || 'Cupón no válido');
+        setCargandoCupon(false);
+        return;
+      }
+
+      const subtotal = parseFloat(total as string);
+      const descuento = calcularDescuento(cupon, subtotal);
+
+      setCuponAplicado(cupon);
+      setDescuentoAplicado(descuento);
+      
+      Alert.alert(
+        '¡Cupón aplicado!',
+        `${cupon.titulo} - ${cupon.descripcion}\nDescuento: $${descuento.toFixed(2)}`
+      );
+
+    } catch (error) {
+      Alert.alert('Error', 'Error al aplicar el cupón');
+    } finally {
+      setCargandoCupon(false);
+    }
+  };
+
+  const quitarCupon = () => {
+    setCuponAplicado(null);
+    setDescuentoAplicado(0);
+    setCodigoCupon('');
+  };
+
+  const seleccionarMetodoGuardado = (index: number) => {
+    const metodo = selectedPayment === 'visa' ? tarjetasGuardadas[index] : billeterasGuardadas[index];
+    setMetodoSeleccionado(index);
+    setCardData({
+      number: metodo.numero,
+      expiry: metodo.fecha,
+      cvv: metodo.cvv,
+      name: `${metodo.nombre} ${metodo.apellido}`
+    });
+  };
+
+  const usarNuevoMetodo = () => {
+    setMetodoSeleccionado(-1);
+    setCardData({
+      number: '',
+      expiry: '',
+      cvv: '',
+      name: ''
+    });
+  };
+
+  const guardarCompra = async () => {
+    try {
+      const subtotal = parseFloat(total as string);
+      const totalFinal = subtotal - descuentoAplicado + 2;
+
+      const nuevaCompra = {
+        tipo: 'Entrada de cine',
+        pelicula: pelicula?.title || 'Película',
+        fecha: fecha,
+        hora: hora,
+        asientos: asientos,
+        fechaCompra: new Date().toISOString(),
+        subtotal: subtotal,
+        descuento: descuentoAplicado,
+        cuponUsado: cuponAplicado?.codigo || null,
+        precio: totalFinal,
+        metodo: selectedPayment === 'visa' ? 'Tarjeta' : 'Billetera',
+      };
+      const comprasPrevias = await AsyncStorage.getItem(COMPRAS_KEY);
+      const lista = comprasPrevias ? JSON.parse(comprasPrevias) : [];
+      lista.push(nuevaCompra);
+      await AsyncStorage.setItem(COMPRAS_KEY, JSON.stringify(lista));
+    } catch {
+    }
+  };
 
   useEffect(() => {
     const fetchPelicula = async () => {
@@ -74,14 +285,6 @@ const CarritoTickets: React.FC = () => {
 
     if (id) fetchPelicula();
   }, [id]);
-
-  const getCurrentDate = (): string => {
-    const today = new Date();
-    const day = today.getDate().toString().padStart(2, '0');
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const year = today.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
 
   const formatCardNumber = (text: string): string => {
     const cleaned = text.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
@@ -102,15 +305,13 @@ const CarritoTickets: React.FC = () => {
   const validateCard = (): boolean => {
     if (selectedPayment === 'visa' || selectedPayment === 'mercadopago') {
       const { number, expiry, cvv, name } = cardData;
-      
-      // Validar número de tarjeta (16 dígitos)
+
       const cardNumber = number.replace(/\s/g, '');
       if (cardNumber.length !== 16) {
         Alert.alert('Error', 'El número de tarjeta debe tener 16 dígitos');
         return false;
       }
 
-      // Validar fecha de expiración
       if (expiry.length !== 5) {
         Alert.alert('Error', 'Ingrese una fecha de expiración válida (MM/AA)');
         return false;
@@ -130,13 +331,11 @@ const CarritoTickets: React.FC = () => {
         return false;
       }
 
-      // Validar CVV
       if (cvv.length !== 3) {
         Alert.alert('Error', 'El CVV debe tener 3 dígitos');
         return false;
       }
 
-      // Validar nombre
       if (name.trim().length < 2) {
         Alert.alert('Error', 'Ingrese el nombre del titular');
         return false;
@@ -146,7 +345,7 @@ const CarritoTickets: React.FC = () => {
     return true;
   };
 
-  const handleFinalizarPago = (): void => {
+  const handleFinalizarPago = async (): Promise<void> => {
     if (!selectedPayment) {
       Alert.alert('Error', 'Seleccione un método de pago');
       return;
@@ -156,18 +355,66 @@ const CarritoTickets: React.FC = () => {
       return;
     }
 
-    // Mostrar popup de éxito
+    await guardarCompra();
+
     setShowSuccessModal(true);
     
-    // Timer para cerrar el modal después de 3 segundos
     setTimeout(() => {
       setShowSuccessModal(false);
-      // Navegar al menú principal
       setTimeout(() => {
         router.replace('menu/menuPrincipal');
       }, 200);
     }, 3000);
   };
+
+  const renderCuponSection = () => (
+    <View style={styles.cuponSection}>
+      <Text style={styles.sectionTitle}>CÓDIGO DE CUPÓN</Text>
+      
+      {!cuponAplicado ? (
+        <View style={styles.cuponInputContainer}>
+          <TextInput
+            style={styles.cuponInput}
+            placeholder="Ingrese código de cupón"
+            placeholderTextColor="#999"
+            value={codigoCupon}
+            onChangeText={setCodigoCupon}
+            autoCapitalize="characters"
+          />
+          <TouchableOpacity
+            style={[styles.aplicarCuponButton, cargandoCupon && styles.buttonDisabled]}
+            onPress={aplicarCupon}
+            disabled={cargandoCupon}
+          >
+            {cargandoCupon ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.aplicarCuponText}>APLICAR</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.cuponAplicado}>
+          <View style={styles.cuponAplicadoInfo}>
+            <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+            <View style={styles.cuponAplicadoTexto}>
+              <Text style={styles.cuponAplicadoTitulo}>{cuponAplicado.titulo}</Text>
+              <Text style={styles.cuponAplicadoDescripcion}>{cuponAplicado.descripcion}</Text>
+              <Text style={styles.cuponAplicadoDescuento}>
+                Descuento: ${descuentoAplicado.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.quitarCuponButton}
+            onPress={quitarCupon}
+          >
+            <Ionicons name="close" size={20} color="#FF0000" />
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
 
   const renderPaymentMethod = (method: PaymentMethod) => (
     <TouchableOpacity
@@ -206,6 +453,53 @@ const CarritoTickets: React.FC = () => {
     </TouchableOpacity>
   );
 
+  const renderMetodosGuardados = () => {
+    const lista = selectedPayment === 'visa' ? tarjetasGuardadas : selectedPayment === 'mercadopago' ? billeterasGuardadas : [];
+    if (!mostrarMetodosGuardados || lista.length === 0) return null;
+
+    return (
+      <View style={styles.metodosGuardadosContainer}>
+        <Text style={styles.metodosGuardadosTitle}>MÉTODOS GUARDADOS</Text>
+        {lista.map((metodo, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.metodoGuardadoItem,
+              metodoSeleccionado === index && styles.metodoGuardadoSelected
+            ]}
+            onPress={() => seleccionarMetodoGuardado(index)}
+          >
+            <View style={styles.metodoGuardadoContent}>
+              <Text style={styles.metodoGuardadoNombre}>
+                {metodo.nombre} {metodo.apellido}
+              </Text>
+              <Text style={styles.metodoGuardadoNumero}>
+                **** **** **** {metodo.numero.replace(/\s/g, '').slice(-4)}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.radioButton,
+                metodoSeleccionado === index && styles.radioButtonSelected
+              ]}
+            >
+              {metodoSeleccionado === index && (
+                <View style={styles.radioButtonInner} />
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+        
+        <TouchableOpacity
+          style={styles.nuevoMetodoButton}
+          onPress={usarNuevoMetodo}
+        >
+          <Text style={styles.nuevoMetodoText}>+ Usar nuevo método de pago</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderCardForm = () => {
     if (selectedPayment !== 'visa' && selectedPayment !== 'mercadopago') return null;
 
@@ -215,46 +509,67 @@ const CarritoTickets: React.FC = () => {
           {selectedPayment === 'visa' ? 'DETALLES DE TARJETA' : 'DETALLES DE BILLETERA'}
         </Text>
         
-        <TextInput
-          style={styles.cardInput}
-          placeholder="Número de tarjeta"
-          placeholderTextColor="#999"
-          value={cardData.number}
-          onChangeText={(text) => setCardData({...cardData, number: formatCardNumber(text)})}
-          keyboardType="numeric"
-          maxLength={19}
-        />
+        {renderMetodosGuardados()}
 
-        <View style={styles.cardRow}>
-          <TextInput
-            style={[styles.cardInput, styles.cardInputHalf]}
-            placeholder="MM/AA"
-            placeholderTextColor="#999"
-            value={cardData.expiry}
-            onChangeText={(text) => setCardData({...cardData, expiry: formatExpiry(text)})}
-            keyboardType="numeric"
-            maxLength={5}
-          />
-          <TextInput
-            style={[styles.cardInput, styles.cardInputHalf]}
-            placeholder="CVV"
-            placeholderTextColor="#999"
-            value={cardData.cvv}
-            onChangeText={(text) => setCardData({...cardData, cvv: text.replace(/\D/g, '').substring(0, 3)})}
-            keyboardType="numeric"
-            maxLength={3}
-            secureTextEntry
-          />
-        </View>
+        {(metodosGuardados.length === 0 || metodoSeleccionado === -1) && (
+          <>
+            <TextInput
+              style={styles.cardInput}
+              placeholder="Número de tarjeta"
+              placeholderTextColor="#999"
+              value={cardData.number}
+              onChangeText={(text) => setCardData({...cardData, number: formatCardNumber(text)})}
+              keyboardType="numeric"
+              maxLength={19}
+            />
 
-        <TextInput
-          style={styles.cardInput}
-          placeholder="Nombre del titular"
-          placeholderTextColor="#999"
-          value={cardData.name}
-          onChangeText={(text) => setCardData({...cardData, name: text})}
-          autoCapitalize="words"
-        />
+            <View style={styles.cardRow}>
+              <TextInput
+                style={[styles.cardInput, styles.cardInputHalf]}
+                placeholder="MM/AA"
+                placeholderTextColor="#999"
+                value={cardData.expiry}
+                onChangeText={(text) => setCardData({...cardData, expiry: formatExpiry(text)})}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+              <TextInput
+                style={[styles.cardInput, styles.cardInputHalf]}
+                placeholder="CVV"
+                placeholderTextColor="#999"
+                value={cardData.cvv}
+                onChangeText={(text) => setCardData({...cardData, cvv: text.replace(/\D/g, '').substring(0, 3)})}
+                keyboardType="numeric"
+                maxLength={3}
+                secureTextEntry
+              />
+            </View>
+
+            <TextInput
+              style={styles.cardInput}
+              placeholder="Nombre del titular"
+              placeholderTextColor="#999"
+              value={cardData.name}
+              onChangeText={(text) => setCardData({...cardData, name: text})}
+              autoCapitalize="words"
+            />
+          </>
+        )}
+
+        {metodoSeleccionado >= 0 && (
+          <View style={styles.datosAutocompletados}>
+            <Text style={styles.datosAutocompletadosTitle}>Datos seleccionados:</Text>
+            <Text style={styles.datosAutocompletadosText}>
+              Tarjeta: **** **** **** {cardData.number.replace(/\s/g, '').slice(-4)}
+            </Text>
+            <Text style={styles.datosAutocompletadosText}>
+              Titular: {cardData.name}
+            </Text>
+            <Text style={styles.datosAutocompletadosText}>
+              Vencimiento: {cardData.expiry}
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -266,6 +581,9 @@ const CarritoTickets: React.FC = () => {
       </View>
     );
   }
+
+  const subtotal = parseFloat(total as string);
+  const totalFinal = subtotal - descuentoAplicado + 2;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -280,7 +598,6 @@ const CarritoTickets: React.FC = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Información del ticket */}
         <View style={styles.ticketCard}>
           <View style={styles.ticketHeader}>
             <Image
@@ -297,7 +614,8 @@ const CarritoTickets: React.FC = () => {
           <Text style={styles.ticketPrice}>${total}</Text>
         </View>
 
-        {/* Método de pago */}
+        {renderCuponSection()}
+
         <Text style={styles.sectionTitle}>MÉTODO DE PAGO</Text>
         
         <View style={styles.paymentMethods}>
@@ -306,24 +624,32 @@ const CarritoTickets: React.FC = () => {
 
         {renderCardForm()}
 
-        {/* Resumen */}
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>RESUMEN</Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryText}>Entradas</Text>
-            <Text style={styles.summaryPrice}>${total}</Text>
+            <Text style={styles.summaryPrice}>${subtotal.toFixed(2)}</Text>
           </View>
+          {cuponAplicado && (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryText, styles.discountText]}>
+                Descuento ({cuponAplicado.codigo})
+              </Text>
+              <Text style={[styles.summaryPrice, styles.discountPrice]}>
+                -${descuentoAplicado.toFixed(2)}
+              </Text>
+            </View>
+          )}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryText}>Servicio</Text>
             <Text style={styles.summaryPrice}>$2.00</Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalText}>Total</Text>
-            <Text style={styles.totalPrice}>${(parseFloat(total as string) + 2).toFixed(2)}</Text>
+            <Text style={styles.totalPrice}>${totalFinal.toFixed(2)}</Text>
           </View>
         </View>
 
-        {/* Botón finalizar */}
         <TouchableOpacity
           style={styles.finalizarButton}
           onPress={handleFinalizarPago}
@@ -332,7 +658,6 @@ const CarritoTickets: React.FC = () => {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal de éxito */}
       <Modal
         visible={showSuccessModal}
         transparent={true}
@@ -346,6 +671,7 @@ const CarritoTickets: React.FC = () => {
             <Text style={styles.successTitle}>¡Compra exitosa!</Text>
             <Text style={styles.successMessage}>
               Tus entradas han sido compradas correctamente
+              {cuponAplicado && `\n¡Cupón ${cuponAplicado.codigo} aplicado con éxito!`}
             </Text>
             <Text style={styles.countdownText}>
               Se cerrará automáticamente en 3 segundos
@@ -358,16 +684,99 @@ const CarritoTickets: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'black',
-    paddingHorizontal: moderateScale(16),
-  },
   loader: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'black',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: 'black',
+    paddingHorizontal: moderateScale(16),
+  },
+  cuponSection: {
+    backgroundColor: '#4a4a4a',
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
+    marginBottom: verticalScale(25),
+  },
+  cuponInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: verticalScale(10),
+  },
+  cuponInput: {
+    flex: 1,
+    backgroundColor: '#333',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    fontSize: moderateScale(16),
+    color: 'white',
+    marginRight: moderateScale(8),
+  },
+  aplicarCuponButton: {
+    backgroundColor: '#FF0000',
+    borderRadius: moderateScale(8),
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: moderateScale(18),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: '#888',
+  },
+  aplicarCuponText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: moderateScale(14),
+  },
+  cuponAplicado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(10),
+    justifyContent: 'space-between',
+  },
+  cuponAplicadoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cuponAplicadoTexto: {
+    marginLeft: moderateScale(10),
+    flex: 1,
+  },
+  cuponAplicadoTitulo: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: moderateScale(15),
+    marginBottom: verticalScale(2),
+  },
+  cuponAplicadoDescripcion: {
+    color: '#ccc',
+    fontSize: moderateScale(13),
+    marginBottom: verticalScale(2),
+  },
+  cuponAplicadoDescuento: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+    fontSize: moderateScale(14),
+  },
+  quitarCuponButton: {
+    marginLeft: moderateScale(10),
+    backgroundColor: 'transparent',
+    padding: moderateScale(4),
+  },
+  discountText: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  discountPrice: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
   },
   mainTitle: {
     fontSize: moderateScale(24),
@@ -471,6 +880,72 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(5),
     backgroundColor: '#FF0000',
   },
+  // Estilos para métodos guardados
+  metodosGuardadosContainer: {
+    marginBottom: verticalScale(20),
+  },
+  metodosGuardadosTitle: {
+    fontSize: moderateScale(14),
+    color: '#ccc',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(10),
+  },
+  metodoGuardadoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#333',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(8),
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  metodoGuardadoSelected: {
+    borderColor: '#FF0000',
+  },
+  metodoGuardadoContent: {
+    flex: 1,
+  },
+  metodoGuardadoNombre: {
+    fontSize: moderateScale(14),
+    color: 'white',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(2),
+  },
+  metodoGuardadoNumero: {
+    fontSize: moderateScale(12),
+    color: '#ccc',
+  },
+  nuevoMetodoButton: {
+    backgroundColor: '#444',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    alignItems: 'center',
+    marginTop: verticalScale(8),
+  },
+  nuevoMetodoText: {
+    fontSize: moderateScale(14),
+    color: '#FF0000',
+    fontWeight: 'bold',
+  },
+  datosAutocompletados: {
+    backgroundColor: '#333',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    marginTop: verticalScale(10),
+  },
+  datosAutocompletadosTitle: {
+    fontSize: moderateScale(14),
+    color: '#ccc',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(8),
+  },
+  datosAutocompletadosText: {
+    fontSize: moderateScale(14),
+    color: 'white',
+    marginBottom: verticalScale(4),
+  },
   cardForm: {
     backgroundColor: '#4a4a4a',
     borderRadius: moderateScale(12),
@@ -552,7 +1027,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-  // Estilos del modal de éxito
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',

@@ -45,10 +45,8 @@ const DatosPersonales = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header reutilizable con botón para ir atrás */}
       <Header title="Datos personales" onBack={() => router.back()} />
 
-      {/* Foto de perfil */}
       <View style={styles.avatarContainer}>
         {fotoPerfil ? (
           <Image source={{ uri: fotoPerfil }} style={styles.avatar} />

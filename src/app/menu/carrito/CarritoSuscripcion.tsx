@@ -17,6 +17,7 @@ import {
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const STORAGE_KEY = 'metodos_pago';
+const COMPRAS_KEY = 'compras_usuario';
 
 interface PaymentMethod {
   id: string;
@@ -38,6 +39,7 @@ interface MetodoPago {
   numero: string;
   fecha: string;
   cvv: string;
+  type: 'card' | 'wallet';
 }
 
 const CarritoSuscripcion: React.FC = () => {
@@ -52,29 +54,27 @@ const CarritoSuscripcion: React.FC = () => {
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
   const [metodosGuardados, setMetodosGuardados] = useState<MetodoPago[]>([]);
   const [metodoSeleccionado, setMetodoSeleccionado] = useState<number>(-1);
-  const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(false);
+  const [tarjetasGuardadas, setTarjetasGuardadas] = useState<MetodoPago[]>([]);
+  const [billeterasGuardadas, setBilleterasGuardadas] = useState<MetodoPago[]>([]);
+  const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(true);
 
   const paymentMethods: PaymentMethod[] = [
     { id: 'visa', name: 'Tarjeta de crédito/débito', icon: 'card', type: 'card' },
     { id: 'mercadopago', name: 'Billetera virtual', icon: 'wallet', type: 'wallet' }
   ];
 
-  // Cargar métodos de pago guardados al inicializar
   useEffect(() => {
     cargarMetodosGuardados();
   }, []);
 
   const cargarMetodosGuardados = async () => {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEY);
-      if (data) {
-        const metodos = JSON.parse(data);
-        setMetodosGuardados(metodos);
-        
-        // Si hay métodos guardados, mostrar la opción de seleccionarlos
-        if (metodos.length > 0) {
-          setMostrarMetodosGuardados(true);
-        }
+      const metodos = await AsyncStorage.getItem(STORAGE_KEY);
+      if (metodos) {
+        const lista: MetodoPago[] = JSON.parse(metodos);
+        setMetodosGuardados(lista);
+        setTarjetasGuardadas(lista.filter(m => m.type === 'card'));
+        setBilleterasGuardadas(lista.filter(m => m.type === 'wallet'));
       }
     } catch (error) {
       console.error('Error al cargar métodos guardados:', error);
@@ -82,16 +82,31 @@ const CarritoSuscripcion: React.FC = () => {
   };
 
   const seleccionarMetodoGuardado = (index: number) => {
-    const metodo = metodosGuardados[index];
+    const metodo = selectedPayment === 'visa' ? tarjetasGuardadas[index] : billeterasGuardadas[index];
     setMetodoSeleccionado(index);
-    
-    // Autocompletar los datos del formulario
     setCardData({
       number: metodo.numero,
       expiry: metodo.fecha,
       cvv: metodo.cvv,
       name: `${metodo.nombre} ${metodo.apellido}`
     });
+  };
+
+  const guardarCompra = async () => {
+    try {
+      const nuevaCompra = {
+        tipo: 'Suscripción Premium',
+        fecha: new Date().toISOString(),
+        precio: 9.99,
+        metodo: selectedPayment === 'visa' ? 'Tarjeta' : 'Billetera',
+      };
+      const comprasPrevias = await AsyncStorage.getItem(COMPRAS_KEY);
+      const lista = comprasPrevias ? JSON.parse(comprasPrevias) : [];
+      lista.push(nuevaCompra);
+      await AsyncStorage.setItem(COMPRAS_KEY, JSON.stringify(lista));
+    } catch (error) {
+      console.error('Error guardando la compra:', error);
+    }
   };
 
   const usarNuevoMetodo = () => {
@@ -131,15 +146,13 @@ const CarritoSuscripcion: React.FC = () => {
   const validateCard = (): boolean => {
     if (selectedPayment === 'visa' || selectedPayment === 'mercadopago') {
       const { number, expiry, cvv, name } = cardData;
-      
-      // Validar número de tarjeta (16 dígitos)
+
       const cardNumber = number.replace(/\s/g, '');
       if (cardNumber.length !== 16) {
         Alert.alert('Error', 'El número de tarjeta debe tener 16 dígitos');
         return false;
       }
 
-      // Validar fecha de expiración
       if (expiry.length !== 5) {
         Alert.alert('Error', 'Ingrese una fecha de expiración válida (MM/AA)');
         return false;
@@ -159,13 +172,11 @@ const CarritoSuscripcion: React.FC = () => {
         return false;
       }
 
-      // Validar CVV
       if (cvv.length !== 3) {
         Alert.alert('Error', 'El CVV debe tener 3 dígitos');
         return false;
       }
 
-      // Validar nombre
       if (name.trim().length < 2) {
         Alert.alert('Error', 'Ingrese el nombre del titular');
         return false;
@@ -173,7 +184,7 @@ const CarritoSuscripcion: React.FC = () => {
     }
 
     return true;
-  };
+  };  
 
   const handleFinalizarPago = async (): Promise<void> => {
     if (!selectedPayment) {
@@ -181,11 +192,8 @@ const CarritoSuscripcion: React.FC = () => {
       return;
     }
 
-    if (!validateCard()) {
-      return;
-    }
+    if (!validateCard()) return;
 
-    // Guardar estado de suscripción
     const fecha = new Date();
     fecha.setMonth(fecha.getMonth() + 1);
     const datos = {
@@ -194,13 +202,12 @@ const CarritoSuscripcion: React.FC = () => {
     };
     await AsyncStorage.setItem('estadoSuscripcion', JSON.stringify(datos));
 
-    // Mostrar popup de éxito
+    await guardarCompra();
+
     setShowSuccessModal(true);
-    
-    // Timer para cerrar el modal después de 3 segundos
+
     setTimeout(() => {
       setShowSuccessModal(false);
-      // Navegar al menú principal
       setTimeout(() => {
         router.replace('menu/menuPrincipal');
       }, 200);
@@ -245,12 +252,13 @@ const CarritoSuscripcion: React.FC = () => {
   );
 
   const renderMetodosGuardados = () => {
-    if (!mostrarMetodosGuardados || metodosGuardados.length === 0) return null;
+    const lista = selectedPayment === 'visa' ? tarjetasGuardadas : selectedPayment === 'mercadopago' ? billeterasGuardadas : [];
+    if (!mostrarMetodosGuardados || lista.length === 0) return null;
 
     return (
       <View style={styles.metodosGuardadosContainer}>
         <Text style={styles.metodosGuardadosTitle}>MÉTODOS GUARDADOS</Text>
-        {metodosGuardados.map((metodo, index) => (
+        {(selectedPayment === 'visa' ? tarjetasGuardadas : billeterasGuardadas).map((metodo, index) => (
           <TouchableOpacity
             key={index}
             style={[
