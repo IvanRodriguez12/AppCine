@@ -1,7 +1,8 @@
 import Header from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Image,
@@ -15,6 +16,8 @@ import {
   View,
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+
+const STORAGE_KEY = 'metodos_pago';
 
 interface PaymentMethod {
   id: string;
@@ -39,6 +42,14 @@ interface ProductoCarrito {
   cantidad: number;
 }
 
+interface MetodoPago {
+  nombre: string;
+  apellido: string;
+  numero: string;
+  fecha: string;
+  cvv: string;
+}
+
 const CarritoCandy: React.FC = () => {
   const { productos, total } = useLocalSearchParams();
   const router = useRouter();
@@ -51,6 +62,9 @@ const CarritoCandy: React.FC = () => {
     name: ''
   });
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [metodosGuardados, setMetodosGuardados] = useState<MetodoPago[]>([]);
+  const [metodoSeleccionado, setMetodoSeleccionado] = useState<number>(-1);
+  const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(false);
 
   // Parsear los productos del carrito
   const productosCarrito: ProductoCarrito[] = productos ? JSON.parse(productos as string) : [];
@@ -59,6 +73,51 @@ const CarritoCandy: React.FC = () => {
     { id: 'visa', name: 'Tarjeta de crédito/débito', icon: 'card', type: 'card' },
     { id: 'mercadopago', name: 'Billetera virtual', icon: 'wallet', type: 'wallet' }
   ];
+
+  // Cargar métodos de pago guardados al inicializar
+  useEffect(() => {
+    cargarMetodosGuardados();
+  }, []);
+
+  const cargarMetodosGuardados = async () => {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEY);
+      if (data) {
+        const metodos = JSON.parse(data);
+        setMetodosGuardados(metodos);
+        
+        // Si hay métodos guardados, mostrar la opción de seleccionarlos
+        if (metodos.length > 0) {
+          setMostrarMetodosGuardados(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error al cargar métodos guardados:', error);
+    }
+  };
+
+  const seleccionarMetodoGuardado = (index: number) => {
+    const metodo = metodosGuardados[index];
+    setMetodoSeleccionado(index);
+    
+    // Autocompletar los datos del formulario
+    setCardData({
+      number: metodo.numero,
+      expiry: metodo.fecha,
+      cvv: metodo.cvv,
+      name: `${metodo.nombre} ${metodo.apellido}`
+    });
+  };
+
+  const usarNuevoMetodo = () => {
+    setMetodoSeleccionado(-1);
+    setCardData({
+      number: '',
+      expiry: '',
+      cvv: '',
+      name: ''
+    });
+  };
 
   const formatCardNumber = (text: string): string => {
     const cleaned = text.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
@@ -183,6 +242,52 @@ const CarritoCandy: React.FC = () => {
     </TouchableOpacity>
   );
 
+  const renderMetodosGuardados = () => {
+    if (!mostrarMetodosGuardados || metodosGuardados.length === 0) return null;
+
+    return (
+      <View style={styles.metodosGuardadosContainer}>
+        <Text style={styles.metodosGuardadosTitle}>MÉTODOS GUARDADOS</Text>
+        {metodosGuardados.map((metodo, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.metodoGuardadoItem,
+              metodoSeleccionado === index && styles.metodoGuardadoSelected
+            ]}
+            onPress={() => seleccionarMetodoGuardado(index)}
+          >
+            <View style={styles.metodoGuardadoContent}>
+              <Text style={styles.metodoGuardadoNombre}>
+                {metodo.nombre} {metodo.apellido}
+              </Text>
+              <Text style={styles.metodoGuardadoNumero}>
+                **** **** **** {metodo.numero.replace(/\s/g, '').slice(-4)}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.radioButton,
+                metodoSeleccionado === index && styles.radioButtonSelected
+              ]}
+            >
+              {metodoSeleccionado === index && (
+                <View style={styles.radioButtonInner} />
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+        
+        <TouchableOpacity
+          style={styles.nuevoMetodoButton}
+          onPress={usarNuevoMetodo}
+        >
+          <Text style={styles.nuevoMetodoText}>+ Usar nuevo método de pago</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderCardForm = () => {
     if (selectedPayment !== 'visa' && selectedPayment !== 'mercadopago') return null;
 
@@ -192,46 +297,70 @@ const CarritoCandy: React.FC = () => {
           {selectedPayment === 'visa' ? 'DETALLES DE TARJETA' : 'DETALLES DE BILLETERA'}
         </Text>
         
-        <TextInput
-          style={styles.cardInput}
-          placeholder="Número de tarjeta"
-          placeholderTextColor="#999"
-          value={cardData.number}
-          onChangeText={(text) => setCardData({...cardData, number: formatCardNumber(text)})}
-          keyboardType="numeric"
-          maxLength={19}
-        />
+        {/* Mostrar métodos guardados si los hay */}
+        {renderMetodosGuardados()}
+        
+        {/* Mostrar formulario solo si no hay método seleccionado o si se eligió usar nuevo método */}
+        {(metodosGuardados.length === 0 || metodoSeleccionado === -1) && (
+          <>
+            <TextInput
+              style={styles.cardInput}
+              placeholder="Número de tarjeta"
+              placeholderTextColor="#999"
+              value={cardData.number}
+              onChangeText={(text) => setCardData({...cardData, number: formatCardNumber(text)})}
+              keyboardType="numeric"
+              maxLength={19}
+            />
 
-        <View style={styles.cardRow}>
-          <TextInput
-            style={[styles.cardInput, styles.cardInputHalf]}
-            placeholder="MM/AA"
-            placeholderTextColor="#999"
-            value={cardData.expiry}
-            onChangeText={(text) => setCardData({...cardData, expiry: formatExpiry(text)})}
-            keyboardType="numeric"
-            maxLength={5}
-          />
-          <TextInput
-            style={[styles.cardInput, styles.cardInputHalf]}
-            placeholder="CVV"
-            placeholderTextColor="#999"
-            value={cardData.cvv}
-            onChangeText={(text) => setCardData({...cardData, cvv: text.replace(/\D/g, '').substring(0, 3)})}
-            keyboardType="numeric"
-            maxLength={3}
-            secureTextEntry
-          />
-        </View>
+            <View style={styles.cardRow}>
+              <TextInput
+                style={[styles.cardInput, styles.cardInputHalf]}
+                placeholder="MM/AA"
+                placeholderTextColor="#999"
+                value={cardData.expiry}
+                onChangeText={(text) => setCardData({...cardData, expiry: formatExpiry(text)})}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+              <TextInput
+                style={[styles.cardInput, styles.cardInputHalf]}
+                placeholder="CVV"
+                placeholderTextColor="#999"
+                value={cardData.cvv}
+                onChangeText={(text) => setCardData({...cardData, cvv: text.replace(/\D/g, '').substring(0, 3)})}
+                keyboardType="numeric"
+                maxLength={3}
+                secureTextEntry
+              />
+            </View>
 
-        <TextInput
-          style={styles.cardInput}
-          placeholder="Nombre del titular"
-          placeholderTextColor="#999"
-          value={cardData.name}
-          onChangeText={(text) => setCardData({...cardData, name: text})}
-          autoCapitalize="words"
-        />
+            <TextInput
+              style={styles.cardInput}
+              placeholder="Nombre del titular"
+              placeholderTextColor="#999"
+              value={cardData.name}
+              onChangeText={(text) => setCardData({...cardData, name: text})}
+              autoCapitalize="words"
+            />
+          </>
+        )}
+        
+        {/* Si hay un método seleccionado, mostrar los datos autocompletados (solo lectura) */}
+        {metodoSeleccionado >= 0 && (
+          <View style={styles.datosAutocompletados}>
+            <Text style={styles.datosAutocompletadosTitle}>Datos seleccionados:</Text>
+            <Text style={styles.datosAutocompletadosText}>
+              Tarjeta: **** **** **** {cardData.number.replace(/\s/g, '').slice(-4)}
+            </Text>
+            <Text style={styles.datosAutocompletadosText}>
+              Titular: {cardData.name}
+            </Text>
+            <Text style={styles.datosAutocompletadosText}>
+              Vencimiento: {cardData.expiry}
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -460,6 +589,72 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     marginBottom: verticalScale(15),
+  },
+  // Nuevos estilos para métodos guardados
+  metodosGuardadosContainer: {
+    marginBottom: verticalScale(20),
+  },
+  metodosGuardadosTitle: {
+    fontSize: moderateScale(14),
+    color: '#ccc',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(10),
+  },
+  metodoGuardadoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#333',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(8),
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  metodoGuardadoSelected: {
+    borderColor: 'red',
+  },
+  metodoGuardadoContent: {
+    flex: 1,
+  },
+  metodoGuardadoNombre: {
+    fontSize: moderateScale(14),
+    color: 'white',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(2),
+  },
+  metodoGuardadoNumero: {
+    fontSize: moderateScale(12),
+    color: '#ccc',
+  },
+  nuevoMetodoButton: {
+    backgroundColor: '#444',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    alignItems: 'center',
+    marginTop: verticalScale(8),
+  },
+  nuevoMetodoText: {
+    fontSize: moderateScale(14),
+    color: '#FF0000',
+    fontWeight: 'bold',
+  },
+  datosAutocompletados: {
+    backgroundColor: '#333',
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
+    marginTop: verticalScale(10),
+  },
+  datosAutocompletadosTitle: {
+    fontSize: moderateScale(14),
+    color: '#ccc',
+    fontWeight: 'bold',
+    marginBottom: verticalScale(8),
+  },
+  datosAutocompletadosText: {
+    fontSize: moderateScale(14),
+    color: 'white',
+    marginBottom: verticalScale(4),
   },
   cardInput: {
     backgroundColor: '#444',
