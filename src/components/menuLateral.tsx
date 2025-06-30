@@ -252,27 +252,34 @@ useEffect(() => {
 
           <View style={styles.separator} />
 
-          <MenuItem icon="info" text="Sobre Nosotros" library="Feather" />
-          <TouchableOpacity
-  style={styles.menuItem}
-  onPress={() => {
-    onClose(); // Cierra el menú lateral
-    router.push('/menu/MiCuenta');
-  }}
->
-  <Ionicons name="person" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-  <Text style={styles.menuItemText}>Mi Cuenta</Text>
-</TouchableOpacity>
-          <TouchableOpacity
-  style={styles.menuItem}
-  onPress={() => {
-    onClose();
-    router.push('/menu/ConfiguracionApp');
-  }}
->
-  <Feather name="settings" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-  <Text style={styles.menuItemText}>Configuración</Text>
-</TouchableOpacity>
+
+<View>
+  <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/SobreNosotros')}>
+    <AntDesign name="info" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+    <Text style={styles.menuItemText}>Sobre Nosotros</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={() => {
+      onClose();
+      router.push('/menu/MiCuenta');
+    }}
+  >
+    <Ionicons name="person" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+    <Text style={styles.menuItemText}>Mi Cuenta</Text>
+  </TouchableOpacity>
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={() => {
+      onClose();
+      router.push('/menu/ConfiguracionApp');
+    }}
+  >
+    <Feather name="settings" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+    <Text style={styles.menuItemText}>Configuración</Text>
+  </TouchableOpacity>
+</View>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogoutPress}>
             <View style={styles.menuItem}>
