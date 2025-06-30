@@ -247,7 +247,11 @@ useEffect(() => {
             <Text style={styles.menuItemText}>Ubicación</Text>
           </TouchableOpacity>
 
-          <MenuItem icon="checkcircleo" text="Mis Reviews" library="AntDesign" />
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisReviews')}>
+          <AntDesign name="checkcircleo" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+          <Text style={styles.menuItemText}>Mis Reviews</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisFavoritos')}>
           <AntDesign name="heart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
           <Text style={styles.menuItemText}>Mis Favoritos</Text>
