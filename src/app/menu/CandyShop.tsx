@@ -2,7 +2,7 @@ import Header from '@/components/Header';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
@@ -99,21 +99,43 @@ const CandyShop = () => {
     setTamaniosSeleccionados(prev => ({ ...prev, [productoId]: tamanio }));
   };
 
-
   const tieneTamanios = (producto: any) => {
     return Object.keys(producto.precios).length > 1;
   };
+
   const agregarAlCarrito = (producto: any) => {
     const tamanio = tieneTamanios(producto)
       ? (tamaniosSeleccionados[producto.id] || 'mediano')
       : 'único';
-    setCarrito(prev => [...prev, { ...producto, tamanio }],);
+    
+    const precio = producto.precios[tamanio];
+    
+    setCarrito(prev => [...prev, { 
+      ...producto, 
+      tamanio,
+      precio,
+      cantidad: 1
+    }]);
   };
 
   const totalCarrito = carrito.reduce((acc, item) => {
-    const precio = (item.precios as any)[item.tamanio];
-    return acc + precio;
-  }, 0).toFixed(2);
+    return acc + (item.precio || 0);
+  }, 0);
+
+  const handleIrAlCarrito = () => {
+    if (carrito.length === 0) {
+      Alert.alert('Carrito vacío', 'Selecciona al menos un producto para continuar');
+      return;
+    }
+
+    router.push({
+      pathname: 'menu/carrito/CarritoCandy',
+      params: {
+        productos: JSON.stringify(carrito),
+        total: totalCarrito.toFixed(2)
+      }
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -201,9 +223,12 @@ const CandyShop = () => {
       <View style={[styles.carritoBar, { paddingBottom: insets.bottom }]}>
         <FontAwesome5 name="shopping-cart" size={22} color="white" />
         <Text style={styles.carritoText}>
-          {carrito.length} producto(s) - Total: ${totalCarrito}
+          {carrito.length} producto(s) - Total: ${totalCarrito.toFixed(2)}
         </Text>
-        <TouchableOpacity style={styles.pagarBtn}>
+        <TouchableOpacity 
+          style={styles.pagarBtn}
+          onPress={handleIrAlCarrito}
+        >
           <Text style={styles.pagarBtnText}>Ir al Carrito</Text>
         </TouchableOpacity>
       </View>
