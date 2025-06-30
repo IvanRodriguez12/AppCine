@@ -24,7 +24,7 @@ const ConfiguracionApp = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Configuración de la app" onBack={() => router.back()} />
+      <Header title="CineApp" onBack={() => router.back()} />
 
       <View style={styles.section}>
         <Text style={styles.label}>Idioma actual:</Text>

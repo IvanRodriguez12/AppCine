@@ -249,9 +249,8 @@ const MetodosPago = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Métodos de pago" onBack={() => router.back()} />
+      <Header title="CineApp" onBack={() => router.back()} />
 
-      {/* Apartado de plan actual */}
       <View style={styles.planContainer}>
         <Text style={styles.planLabel}>Plan actual:</Text>
         <Text style={[styles.planText, estadoSuscripcion?.suscripto && { color: '#FFD700' }]}>
@@ -378,14 +377,12 @@ const MetodosPago = () => {
         </>
       )}
 
-      {/* Si hay métodos y no se muestra el formulario, muestra el botón abajo */}
       {metodos.length > 0 && !mostrarFormulario && (
         <TouchableOpacity style={styles.btn} onPress={() => setMostrarFormulario(true)}>
           <Text style={styles.btnText}>Agregar método de pago</Text>
         </TouchableOpacity>
       )}
 
-      {/* Modal de confirmación de borrado */}
       <Modal
         visible={showDeleteModal}
         transparent={true}

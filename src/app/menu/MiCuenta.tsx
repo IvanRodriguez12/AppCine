@@ -9,8 +9,7 @@ const MiCuenta = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Usa el Header reutilizable */}
-      <Header title="Mi Cuenta" onBack={() => router.back()} />
+      <Header title="CineApp" onBack={() => router.back()} />
 
       <View style={styles.section}>
         <TouchableOpacity

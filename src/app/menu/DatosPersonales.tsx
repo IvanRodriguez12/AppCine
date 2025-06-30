@@ -45,7 +45,7 @@ const DatosPersonales = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Datos personales" onBack={() => router.back()} />
+      <Header title="CineApp" onBack={() => router.back()} />
 
       <View style={styles.avatarContainer}>
         {fotoPerfil ? (

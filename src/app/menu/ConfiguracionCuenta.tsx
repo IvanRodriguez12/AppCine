@@ -22,7 +22,7 @@ const ConfiguracionCuenta = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Configuración de la cuenta" onBack={() => router.back()} />
+      <Header title="CineApp" onBack={() => router.back()} />
       <Text style={styles.title}>Opciones de cuenta</Text>
       <TouchableOpacity style={styles.btnEliminar} onPress={handleEliminar}>
         <Text style={styles.btnText}>Eliminar cuenta</Text>
