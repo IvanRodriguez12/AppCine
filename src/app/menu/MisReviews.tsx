@@ -22,6 +22,7 @@ interface Review {
   content: string;
   authorEmail: string;
   authorName: string;
+  movieid: number;
 }
 
 const MisReviews: React.FC = () => {
@@ -33,37 +34,18 @@ const MisReviews: React.FC = () => {
     
     useEffect(() => {
     const cargar = async () => {
-      const reviewsGuardadas = await AsyncStorage.getItem('Reviews');
-      const reviews = reviewsGuardadas ? JSON.parse(reviewsGuardadas) : [];
+      try{
+        const reviewsGuardadas = await AsyncStorage.getItem('reviews');
+        const reviews = reviewsGuardadas ? JSON.parse(reviewsGuardadas) : [];
 
-      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
-      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+        const usuarioData = await AsyncStorage.getItem('usuarioActual');
+        const usuario = usuarioData ? JSON.parse(usuarioData) : [];
 
-      {/*
-      const ReviewTest = {
-        id: 1,
-        date: "18/10/2004",
-        rating:5,
-        subject:"hawk tuah movie",
-        content:"TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO ",
-        authorEmail: "a@a.com",
-        authorName:"john"
+        const filtrados = reviews.filter((r:any) => usuario.email === r.authorEmail);
+        setReviews(filtrados);
+      }catch{
+
       }
-
-      const ReviewTest2 = {
-        id: 2,
-        date: "18/10/2004",
-        rating: 4,
-        subject:"hawk tuah movie 2",
-        content:"bien TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO TEXTO ",
-        authorEmail: "a@a.com",
-        authorName:"john 2"
-      }
-      reviews.push(ReviewTest)
-      reviews.push(ReviewTest2)
-      */}
-      const filtrados = reviews.filter((r:any) => (usuarios.find((u: any) => u.email === r.authorEmail)));
-      setReviews(filtrados);
     };
     cargar();
     }, []);
@@ -223,8 +205,6 @@ const styles = StyleSheet.create({
   },
   infoContainer: {
     backgroundColor: '#2a2a2a',
-    flexDirection: 'row',
-    alignItems: 'center',
     margin: moderateScale(16),
     padding: moderateScale(16),
     borderRadius: moderateScale(12),
@@ -395,7 +375,6 @@ const styles = StyleSheet.create({
   },
   titleStars:{
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: verticalScale(2),
   }
