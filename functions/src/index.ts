@@ -34,9 +34,9 @@ app.get('/health', (req, res) => {
 });
 
 // Rutas
-app.use('/api/users', userRoutes);
-app.use('/api/movies', movieRoutes);
-app.use('/api/bookings', bookingRoutes);
+app.use('/users', userRoutes);
+app.use('/movies', movieRoutes);
+app.use('/bookings', bookingRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {

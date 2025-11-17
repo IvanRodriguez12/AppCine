@@ -1,46 +1,210 @@
 import { Router } from 'express';
-import * as admin from 'firebase-admin';
 import { db, auth } from '../config/firebase';
+import admin from '../config/firebase'; 
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
 
 const router = Router();
 
-/**
- * POST /api/users/register
- * Registro de nuevo usuario
- */
-router.post('/register', asyncHandler(async (req: any, res: any) => {
-  const { email, password, displayName } = req.body;
+// ==================== FUNCIONES DE VALIDACIÓN ====================
 
-  // Validación básica
-  if (!email || !password || !displayName) {
-    throw new ApiError(400, 'Email, contraseña y nombre son requeridos');
+/**
+ * Valida la fortaleza de la contraseña
+ */
+const validatePassword = (password: string): { valid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+
+  if (password.length < 8) {
+    errors.push('La contraseña debe tener al menos 8 caracteres');
   }
 
-  if (password.length < 6) {
-    throw new ApiError(400, 'La contraseña debe tener al menos 6 caracteres');
+  if (!/[A-Z]/.test(password)) {
+    errors.push('La contraseña debe contener al menos una letra mayúscula');
+  }
+
+  if (!/[a-z]/.test(password)) {
+    errors.push('La contraseña debe contener al menos una letra minúscula');
+  }
+
+  if (!/[0-9]/.test(password)) {
+    errors.push('La contraseña debe contener al menos un número');
+  }
+
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    errors.push('La contraseña debe contener al menos un caracter especial (!@#$%^&*...)');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+};
+
+/**
+ * Valida que el usuario sea mayor de 18 años
+ */
+const validateAge = (birthDate: string): { valid: boolean; age: number; error?: string } => {
+  if (!birthDate) {
+    return { valid: false, age: 0, error: 'La fecha de nacimiento es requerida' };
+  }
+
+  // Parsear fecha (formato: YYYY-MM-DD o DD/MM/YYYY)
+  let date: Date;
+  
+  if (birthDate.includes('-')) {
+    // Formato YYYY-MM-DD
+    date = new Date(birthDate);
+  } else if (birthDate.includes('/')) {
+    // Formato DD/MM/YYYY
+    const [day, month, year] = birthDate.split('/');
+    date = new Date(`${year}-${month}-${day}`);
+  } else {
+    return { valid: false, age: 0, error: 'Formato de fecha inválido. Use YYYY-MM-DD o DD/MM/YYYY' };
+  }
+
+  if (isNaN(date.getTime())) {
+    return { valid: false, age: 0, error: 'Fecha de nacimiento inválida' };
+  }
+
+  // Calcular edad
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  const monthDiff = today.getMonth() - date.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
+    age--;
+  }
+
+  if (age < 0) {
+    return { valid: false, age: 0, error: 'Fecha de nacimiento no puede estar en el futuro' };
+  }
+
+  if (age < 18) {
+    return { valid: false, age, error: 'Debes ser mayor de 18 años para registrarte' };
+  }
+
+  if (age > 120) {
+    return { valid: false, age, error: 'Fecha de nacimiento inválida' };
+  }
+
+  return { valid: true, age };
+};
+
+/**
+ * Valida el formato del email
+ */
+const validateEmail = (email: string): { valid: boolean; error?: string } => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  
+  if (!emailRegex.test(email)) {
+    return { valid: false, error: 'Formato de email inválido' };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Valida el teléfono (opcional pero si se envía debe ser válido)
+ */
+const validatePhone = (phone: string): { valid: boolean; error?: string } => {
+  // Acepta formatos: +5491123456789, 1123456789, (011) 2345-6789
+  const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,20}$/;
+  
+  if (!phoneRegex.test(phone)) {
+    return { valid: false, error: 'Formato de teléfono inválido' };
+  }
+
+  return { valid: true };
+};
+
+// ==================== REGISTRO ====================
+
+/**
+ * POST /users/register
+ * Registro de nuevo usuario con validaciones completas
+ */
+router.post('/register', asyncHandler(async (req: any, res: any) => {
+  const { 
+    email, 
+    password, 
+    displayName, 
+    birthDate,
+    phone,
+    acceptTerms 
+  } = req.body;
+
+  // Validaciones básicas
+  if (!email || !password || !displayName || !birthDate) {
+    throw new ApiError(400, 'Email, contraseña, nombre y fecha de nacimiento son requeridos');
+  }
+
+  if (!acceptTerms) {
+    throw new ApiError(400, 'Debes aceptar los términos y condiciones');
+  }
+
+  // Validar email
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.valid) {
+    throw new ApiError(400, emailValidation.error || 'Email inválido');
+  }
+
+  // Validar contraseña
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.valid) {
+    throw new ApiError(400, passwordValidation.errors.join('. '));
+  }
+
+  // Validar edad
+  const ageValidation = validateAge(birthDate);
+  if (!ageValidation.valid) {
+    throw new ApiError(400, ageValidation.error || 'Edad inválida');
+  }
+
+  // Validar teléfono (opcional)
+  if (phone) {
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.valid) {
+      throw new ApiError(400, phoneValidation.error || 'Teléfono inválido');
+    }
   }
 
   // Crear usuario en Firebase Auth
   const userRecord = await auth.createUser({
     email,
     password,
-    displayName
+    displayName,
+    emailVerified: false
   });
 
   // Crear documento en Firestore
   await db.collection('users').doc(userRecord.uid).set({
     email,
     displayName,
+    phone: phone || null,
+    birthDate,
+    age: ageValidation.age,
     role: 'user',
+    isEmailVerified: false,
+    emailVerifiedAt: null,
+    emailVerificationSentAt: null,
+    dniUploaded: false,
+    dniUrl: null,
+    dniVerifiedAt: null,
+    faceVerified: false,
+    faceVerificationScore: null,
+    faceVerifiedAt: null,
+    accountStatus: 'active',
+    accountLevel: 'basic',
     favorites: [],
     watchlist: [],
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    acceptedTerms: true,
+    acceptedTermsAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastLoginAt: null
   });
 
-  // Generar custom token para login automático
+  // Generar custom token
   const customToken = await auth.createCustomToken(userRecord.uid);
 
   res.status(201).json({
@@ -48,14 +212,245 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     user: {
       uid: userRecord.uid,
       email: userRecord.email,
-      displayName: userRecord.displayName
+      displayName: userRecord.displayName,
+      age: ageValidation.age,
+      role: 'user',
+      accountLevel: 'basic',
+      isEmailVerified: false,
+      dniUploaded: false,
+      faceVerified: false
     },
-    customToken
+    customToken,
+    nextSteps: [
+      'Verifica tu email',
+      'Sube tu documento de identidad',
+      'Completa la verificación facial'
+    ]
+  });
+}));
+
+// ==================== LOGIN ====================
+
+/**
+ * POST /users/login
+ * Login de usuario
+ */
+router.post('/login', asyncHandler(async (req: any, res: any) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    throw new ApiError(400, 'Email y contraseña son requeridos');
+  }
+
+  // Verificar que el usuario existe
+  let userRecord;
+  try {
+    userRecord = await auth.getUserByEmail(email);
+  } catch (error) {
+    throw new ApiError(401, 'Credenciales inválidas');
+  }
+
+  // Obtener datos de Firestore
+  const userDoc = await db.collection('users').doc(userRecord.uid).get();
+
+  if (!userDoc.exists) {
+    throw new ApiError(404, 'Usuario no encontrado');
+  }
+
+  const userData = userDoc.data();
+
+  // Verificar estado de la cuenta
+  if (userData?.accountStatus === 'suspended') {
+    throw new ApiError(403, 'Tu cuenta ha sido suspendida. Contacta al soporte.');
+  }
+
+  if (userData?.accountStatus === 'banned') {
+    throw new ApiError(403, 'Tu cuenta ha sido bloqueada permanentemente.');
+  }
+
+  // Actualizar última fecha de login
+  await db.collection('users').doc(userRecord.uid).update({
+    lastLoginAt: new Date().toISOString()
+  });
+
+  // Generar custom token
+  const customToken = await auth.createCustomToken(userRecord.uid);
+
+  res.json({
+    message: 'Login exitoso',
+    customToken,
+    user: {
+      uid: userRecord.uid,
+      email: userData?.email,
+      displayName: userData?.displayName,
+      role: userData?.role,
+      accountLevel: userData?.accountLevel,
+      // Estados de verificación
+      isEmailVerified: userData?.isEmailVerified,
+      dniUploaded: userData?.dniUploaded,
+      faceVerified: userData?.faceVerified
+    }
+  });
+}));
+
+// ==================== VERIFICACIÓN DE EMAIL ====================
+
+/**
+ * POST /users/send-verification-email
+ * Envía email de verificación al usuario autenticado
+ */
+router.post('/send-verification-email', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
+  const userId = req.user?.uid;
+
+  if (!userId) {
+    throw new ApiError(401, 'Usuario no autenticado');
+  }
+
+  // Obtener datos del usuario
+  const userDoc = await db.collection('users').doc(userId).get();
+  
+  if (!userDoc.exists) {
+    throw new ApiError(404, 'Usuario no encontrado');
+  }
+
+  const userData = userDoc.data();
+
+  // Verificar si ya está verificado
+  if (userData?.isEmailVerified) {
+    return res.json({
+      message: 'El email ya está verificado',
+      alreadyVerified: true
+    });
+  }
+
+  // Generar link de verificación con Firebase Auth
+  const email = userData?.email;
+  const verificationLink = await auth.generateEmailVerificationLink(email);
+
+  // Actualizar timestamp de envío
+  await db.collection('users').doc(userId).update({
+    emailVerificationSentAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  // En producción, aquí enviarías el email con SendGrid, Nodemailer, etc.
+  // Por ahora, devolvemos el link en la respuesta para testing
+  console.log('=== LINK DE VERIFICACIÓN ===');
+  console.log(verificationLink);
+  console.log('===========================');
+
+  res.json({
+    message: 'Email de verificación enviado exitosamente',
+    // ⚠️ SOLO PARA DESARROLLO - En producción NO devolver el link
+    verificationLink: process.env.NODE_ENV === 'development' ? verificationLink : undefined,
+    sentTo: email
   });
 }));
 
 /**
- * GET /api/users/:id
+ * POST /users/verify-email
+ * Verifica el email del usuario usando el oobCode de Firebase
+ */
+router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
+  const { oobCode } = req.body;
+
+  if (!oobCode) {
+    throw new ApiError(400, 'Código de verificación es requerido');
+  }
+
+  try {
+    // Verificar el código con Firebase Auth
+    // En el emulador, necesitamos obtener el email del código
+    // y marcarlo como verificado manualmente
+    
+    // NOTA: En producción, Firebase maneja esto automáticamente
+    // cuando el usuario hace click en el link del email
+    
+    // Para el emulador, vamos a usar un enfoque alternativo:
+    // El código oobCode debe venir en el formato: email:code
+    const [email] = oobCode.split(':');
+    
+    if (!email) {
+      throw new ApiError(400, 'Código de verificación inválido');
+    }
+
+    // Obtener usuario por email
+    const userRecord = await auth.getUserByEmail(email);
+
+    // Actualizar en Firebase Auth
+    await auth.updateUser(userRecord.uid, {
+      emailVerified: true
+    });
+
+    // Actualizar en Firestore
+    await db.collection('users').doc(userRecord.uid).update({
+      isEmailVerified: true,
+      emailVerifiedAt: new Date().toISOString(),
+      accountLevel: 'verified', // Upgrade de 'basic' a 'verified'
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({
+      message: 'Email verificado exitosamente',
+      verified: true,
+      accountLevel: 'verified'
+    });
+
+  } catch (error: any) {
+    console.error('Error verificando email:', error);
+    
+    if (error.code === 'auth/user-not-found') {
+      throw new ApiError(404, 'Usuario no encontrado');
+    }
+    
+    if (error.code === 'auth/invalid-action-code') {
+      throw new ApiError(400, 'Código de verificación inválido o expirado');
+    }
+
+    throw new ApiError(500, 'Error al verificar email');
+  }
+}));
+
+/**
+ * GET /users/:id/verification-status
+ * Obtiene el estado de verificación del usuario
+ */
+router.get('/:id/verification-status', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+
+  // Solo puede ver su propio estado (a menos que sea admin)
+  if (req.user?.uid !== id && req.user?.role !== 'admin') {
+    throw new ApiError(403, 'No autorizado');
+  }
+
+  const userDoc = await db.collection('users').doc(id).get();
+
+  if (!userDoc.exists) {
+    throw new ApiError(404, 'Usuario no encontrado');
+  }
+
+  const userData = userDoc.data();
+
+  res.json({
+    userId: id,
+    email: userData?.email,
+    verificationStatus: {
+      emailVerified: userData?.isEmailVerified || false,
+      emailVerifiedAt: userData?.emailVerifiedAt,
+      dniUploaded: userData?.dniUploaded || false,
+      dniVerifiedAt: userData?.dniVerifiedAt,
+      faceVerified: userData?.faceVerified || false,
+      faceVerifiedAt: userData?.faceVerifiedAt
+    },
+    accountLevel: userData?.accountLevel,
+    accountStatus: userData?.accountStatus
+  });
+}));
+
+// ==================== PERFIL ====================
+
+/**
+ * GET /users/:id
  * Obtener perfil de usuario
  */
 router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
@@ -83,12 +478,12 @@ router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
 }));
 
 /**
- * PUT /api/users/:id
+ * PUT /users/:id
  * Actualizar perfil de usuario
  */
 router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
-  const { displayName, photoURL, bio } = req.body;
+  const { displayName, photoURL, bio, phone } = req.body;
 
   // Solo puede actualizar su propio perfil
   if (req.user?.uid !== id) {
@@ -96,12 +491,20 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
   }
 
   const updateData: any = {
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: new Date().toISOString()
   };
 
   if (displayName) updateData.displayName = displayName;
   if (photoURL) updateData.photoURL = photoURL;
   if (bio) updateData.bio = bio;
+  
+  if (phone) {
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.valid) {
+      throw new ApiError(400, phoneValidation.error || 'Teléfono inválido');
+    }
+    updateData.phone = phone;
+  }
 
   await db.collection('users').doc(id).update(updateData);
 
@@ -120,8 +523,10 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
   });
 }));
 
+// ==================== FAVORITOS ====================
+
 /**
- * GET /api/users/:id/favorites
+ * GET /users/:id/favorites
  * Obtener películas favoritas del usuario
  */
 router.get('/:id/favorites', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
@@ -147,7 +552,7 @@ router.get('/:id/favorites', verifyToken, asyncHandler(async (req: AuthRequest, 
 }));
 
 /**
- * POST /api/users/:id/favorites
+ * POST /users/:id/favorites
  * Agregar película a favoritos
  */
 router.post('/:id/favorites', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
@@ -164,7 +569,7 @@ router.post('/:id/favorites', verifyToken, asyncHandler(async (req: AuthRequest,
 
   await db.collection('users').doc(id).update({
     favorites: admin.firestore.FieldValue.arrayUnion(movieId),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: new Date().toISOString()
   });
 
   res.json({
@@ -174,7 +579,7 @@ router.post('/:id/favorites', verifyToken, asyncHandler(async (req: AuthRequest,
 }));
 
 /**
- * DELETE /api/users/:id/favorites/:movieId
+ * DELETE /users/:id/favorites/:movieId
  * Quitar película de favoritos
  */
 router.delete('/:id/favorites/:movieId', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
@@ -186,7 +591,7 @@ router.delete('/:id/favorites/:movieId', verifyToken, asyncHandler(async (req: A
 
   await db.collection('users').doc(id).update({
     favorites: admin.firestore.FieldValue.arrayRemove(Number(movieId)),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: new Date().toISOString()
   });
 
   res.json({
