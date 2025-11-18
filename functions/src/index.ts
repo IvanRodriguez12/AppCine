@@ -10,6 +10,7 @@ import { db } from './config/firebase';
 // Importar rutas
 import userRoutes from './routes/users';
 import dniRoutes from './routes/dni';
+import verificationRoutes from './routes/verification';
 import movieRoutes from './routes/movies';
 import bookingRoutes from './routes/bookings';
 
@@ -39,6 +40,7 @@ app.use('/users', userRoutes);
 app.use('/dni', dniRoutes);
 app.use('/movies', movieRoutes);
 app.use('/bookings', bookingRoutes);
+app.use('/verification', verificationRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {
