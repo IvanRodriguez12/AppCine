@@ -3,20 +3,19 @@ import { db } from '../config/firebase';
 import admin from '../config/firebase';
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
+import { verifyFace, validateImageForRekognition } from '../services/rekognitionService';
+import axios from 'axios';
 
 const router = Router();
 
 // ==================== FUNCIONES DE VALIDACIÓN ====================
 
-/**
- * Valida imagen base64
- */
 const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: boolean; error?: string } => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
   if (!allowedTypes.includes(mimeType.toLowerCase())) {
     return { 
       valid: false, 
-      error: 'Formato de imagen no válido. Solo se permiten: JPEG, PNG, WEBP' 
+      error: 'Formato inválido. Solo JPEG y PNG son soportados por Rekognition' 
     };
   }
 
@@ -38,29 +37,25 @@ const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: bo
 };
 
 /**
- * Simula verificación facial
- * En producción, aquí integrarías un servicio real como:
- * - AWS Rekognition
- * - Google Cloud Vision API
- * - Azure Face API
- * - Face++
+ * Descarga una imagen desde una URL y la convierte a Buffer
  */
-const simulateFaceVerification = async (): Promise<{ match: boolean; score: number }> => {
-  // Simular tiempo de procesamiento
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Generar score aleatorio entre 85-98%
-  const score = Math.random() * 0.13 + 0.85;
-  const match = score >= 0.85;
-  
-  return { match, score };
-};
+async function downloadImageAsBuffer(url: string): Promise<Buffer> {
+  try {
+    const response = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 10000
+    });
+    return Buffer.from(response.data as ArrayBuffer);
+  } catch (error: any) {
+    throw new Error(`Error descargando imagen: ${error.message}`);
+  }
+}
 
 // ==================== ENDPOINTS ====================
 
 /**
  * POST /verification/face
- * Verifica el rostro del usuario comparándolo con su DNI
+ * Verifica el rostro del usuario usando AWS Rekognition
  */
 router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
@@ -90,7 +85,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   const userData = userDoc.data();
 
   // Verificar que tenga DNI subido
-  if (!userData?.dniUploaded) {
+  if (!userData?.dniUploaded || !userData?.dniUrl) {
     throw new ApiError(400, 'Debes subir tu DNI antes de verificar tu rostro');
   }
 
@@ -100,8 +95,19 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
       message: 'El rostro ya está verificado',
       alreadyVerified: true,
       verifiedAt: userData?.faceVerifiedAt,
-      score: userData?.faceVerificationScore
+      similarity: userData?.faceVerificationScore 
+        ? parseFloat((userData.faceVerificationScore * 100).toFixed(2))
+        : null
     });
+  }
+
+  // Convertir selfie base64 a buffer
+  const selfieBuffer = Buffer.from(imageBase64, 'base64');
+
+  // Validar selfie para Rekognition
+  const selfieValidation = validateImageForRekognition(selfieBuffer);
+  if (!selfieValidation.valid) {
+    throw new ApiError(400, selfieValidation.error || 'Selfie inválida');
   }
 
   // Obtener bucket de Storage
@@ -112,11 +118,8 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   const fileName = `selfies/${userId}_${Date.now()}.${fileExtension}`;
   const file = bucket.file(fileName);
 
-  // Convertir base64 a buffer
-  const buffer = Buffer.from(imageBase64, 'base64');
-
   // Subir selfie a Storage
-  await file.save(buffer, {
+  await file.save(selfieBuffer, {
     metadata: {
       contentType: mimeType,
       metadata: {
@@ -127,63 +130,100 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     public: false,
   });
 
-  // Obtener URL firmada (válida por 7 días)
+  // Obtener URL firmada de la selfie
   const [selfieUrl] = await file.getSignedUrl({
     action: 'read',
     expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
 
-  // ========== VERIFICACIÓN FACIAL ==========
-  // AQUÍ INTEGRARÍAS UN SERVICIO REAL DE RECONOCIMIENTO FACIAL
-  // Por ahora, usamos simulación
-  
-  console.log('=== VERIFICACIÓN FACIAL ===');
-  console.log('DNI URL:', userData?.dniUrl);
-  console.log('Selfie URL:', selfieUrl);
-  console.log('Simulando comparación...');
-  
-  const { match, score } = await simulateFaceVerification();
-  
-  console.log('Resultado:', match ? 'MATCH ✅' : 'NO MATCH ❌');
-  console.log('Score:', (score * 100).toFixed(2) + '%');
-  console.log('==========================');
+  console.log('=== 🔍 VERIFICACIÓN FACIAL CON AWS REKOGNITION ===');
+  console.log('👤 Usuario:', userId);
+  console.log('📸 Selfie subida:', fileName);
+  console.log('🪪 DNI URL:', userData?.dniUrl);
 
-  // Actualizar Firestore
-  const updateData: any = {
-    selfieUrl,
-    selfieFileName: fileName,
-    faceVerificationScore: score,
-    faceVerificationAttemptAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
+  try {
+    // Descargar imagen del DNI
+    console.log('⬇️  Descargando DNI...');
+    const dniBuffer = await downloadImageAsBuffer(userData.dniUrl);
 
-  if (match) {
-    updateData.faceVerified = true;
-    updateData.faceVerifiedAt = new Date().toISOString();
-  }
+    // Validar DNI
+    const dniValidation = validateImageForRekognition(dniBuffer);
+    if (!dniValidation.valid) {
+      throw new ApiError(400, `DNI inválido: ${dniValidation.error}`);
+    }
 
-  await db.collection('users').doc(userId).update(updateData);
+    // ========== VERIFICACIÓN CON AWS REKOGNITION ==========
+    console.log('🚀 Iniciando verificación facial con AWS Rekognition...');
+    const verificationResult = await verifyFace(selfieBuffer, dniBuffer);
 
-  if (match) {
-    res.json({
-      message: 'Verificación facial exitosa',
-      verified: true,
-      score: parseFloat((score * 100).toFixed(2)),
-      selfieUrl
+    console.log('✅ Resultado:', verificationResult.verified ? '✅ VERIFICADO' : '❌ NO VERIFICADO');
+    console.log('📊 Similitud:', verificationResult.similarity + '%');
+    console.log('💬 Mensaje:', verificationResult.message);
+    console.log('===============================================');
+
+    if (!verificationResult.success) {
+      throw new ApiError(500, verificationResult.message);
+    }
+
+    // Calcular score normalizado (0-1)
+    const score = verificationResult.similarity / 100;
+
+    // Actualizar Firestore
+    const updateData: any = {
+      selfieUrl,
+      selfieFileName: fileName,
+      faceVerificationScore: score,
+      faceVerificationAttemptAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (verificationResult.verified) {
+      updateData.faceVerified = true;
+      updateData.faceVerifiedAt = new Date().toISOString();
+      updateData.accountLevel = 'premium';
+    }
+
+    await db.collection('users').doc(userId).update(updateData);
+
+    // Respuesta al cliente
+    if (verificationResult.verified) {
+      res.json({
+        message: verificationResult.message,
+        verified: true,
+        similarity: verificationResult.similarity,
+        selfieUrl,
+        details: verificationResult.details
+      });
+    } else {
+      res.status(400).json({
+        error: 'Verificación facial fallida',
+        message: verificationResult.message,
+        verified: false,
+        similarity: verificationResult.similarity,
+        details: verificationResult.details
+      });
+    }
+
+  } catch (error: any) {
+    console.error('❌ Error en verificación facial:', error);
+
+    // Registrar intento fallido
+    await db.collection('users').doc(userId).update({
+      faceVerificationAttemptAt: new Date().toISOString(),
+      lastVerificationError: error.message,
+      updatedAt: new Date().toISOString()
     });
-  } else {
-    res.status(400).json({
-      error: 'Verificación facial fallida',
-      message: 'El rostro no coincide con el documento. Por favor, intenta de nuevo.',
-      verified: false,
-      score: parseFloat((score * 100).toFixed(2))
-    });
+
+    throw new ApiError(
+      500, 
+      error.message || 'Error al verificar rostro con AWS Rekognition'
+    );
   }
 }));
 
 /**
  * GET /verification/status
- * Obtiene el estado completo de verificación del usuario autenticado
+ * Obtiene el estado completo de verificación
  */
 router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
@@ -218,10 +258,11 @@ router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: an
       face: {
         verified: userData?.faceVerified || false,
         verifiedAt: userData?.faceVerifiedAt || null,
-        score: userData?.faceVerificationScore 
+        similarity: userData?.faceVerificationScore 
           ? parseFloat((userData.faceVerificationScore * 100).toFixed(2))
           : null,
-        lastAttemptAt: userData?.faceVerificationAttemptAt || null
+        lastAttemptAt: userData?.faceVerificationAttemptAt || null,
+        lastError: userData?.lastVerificationError || null
       }
     }
   });
@@ -229,7 +270,7 @@ router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: an
 
 /**
  * DELETE /verification/face
- * Elimina la verificación facial (permite re-intentar)
+ * Elimina la verificación facial
  */
 router.delete('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
@@ -250,23 +291,26 @@ router.delete('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: a
     throw new ApiError(400, 'No hay verificación facial para eliminar');
   }
 
-  // Eliminar selfie de Storage si existe
+  // Eliminar selfie
   if (userData?.selfieFileName) {
     try {
       const bucket = admin.storage().bucket();
       await bucket.file(userData.selfieFileName).delete();
+      console.log('🗑️  Selfie eliminada:', userData.selfieFileName);
     } catch (error) {
-      console.error('Error eliminando selfie de Storage:', error);
+      console.error('Error eliminando selfie:', error);
     }
   }
 
-  // Limpiar datos en Firestore
+  // Limpiar datos
   await db.collection('users').doc(userId).update({
     selfieUrl: null,
     selfieFileName: null,
     faceVerified: false,
     faceVerificationScore: null,
     faceVerifiedAt: null,
+    lastVerificationError: null,
+    accountLevel: userData?.isEmailVerified ? 'verified' : 'basic',
     updatedAt: new Date().toISOString()
   });
 
