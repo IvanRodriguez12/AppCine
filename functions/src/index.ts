@@ -7,8 +7,9 @@ import cors from 'cors';
 // Inicializar Firebase PRIMERO
 import { db } from './config/firebase';
 
-// Importar rutas DESPUÉS
+// Importar rutas
 import userRoutes from './routes/users';
+import dniRoutes from './routes/dni';
 import movieRoutes from './routes/movies';
 import bookingRoutes from './routes/bookings';
 
@@ -20,8 +21,8 @@ import { requestLogger } from './middleware/logger';
 const app = express();
 
 // Middlewares globales
-app.use(cors({ origin: true })); // Permite todas las origins en desarrollo
-app.use(express.json());
+app.use(cors({ origin: true }));
+app.use(express.json({ limit: '10mb' })); // Aumentar límite para base64
 app.use(requestLogger);
 
 // Health check
@@ -35,6 +36,7 @@ app.get('/health', (req, res) => {
 
 // Rutas
 app.use('/users', userRoutes);
+app.use('/dni', dniRoutes);
 app.use('/movies', movieRoutes);
 app.use('/bookings', bookingRoutes);
 
@@ -52,15 +54,12 @@ app.use(errorHandler);
 // Exportar como Cloud Function v2
 export const api = onRequest(app);
 
-// Ejemplo de función triggered por Firestore
+// Función triggered por Firestore
 export const onUserCreated = onDocumentCreated('users/{userId}', async (event) => {
   const userData = event.data?.data();
   const userId = event.params.userId;
   
   console.log(`Nuevo usuario creado: ${userId}`, userData);
-  
-  // Aquí puedes hacer acciones automáticas
-  // Por ejemplo: enviar email de bienvenida, crear documento relacionado, etc.
 });
 
 // Función programada (cada día a las 00:00)
@@ -70,7 +69,6 @@ export const dailyCleanup = onSchedule({
 }, async (event) => {
   console.log('Ejecutando limpieza diaria...');
   
-  // Aquí puedes limpiar reservas expiradas, etc.
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   

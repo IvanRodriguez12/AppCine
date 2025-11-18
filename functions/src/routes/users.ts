@@ -48,14 +48,11 @@ const validateAge = (birthDate: string): { valid: boolean; age: number; error?: 
     return { valid: false, age: 0, error: 'La fecha de nacimiento es requerida' };
   }
 
-  // Parsear fecha (formato: YYYY-MM-DD o DD/MM/YYYY)
   let date: Date;
   
   if (birthDate.includes('-')) {
-    // Formato YYYY-MM-DD
     date = new Date(birthDate);
   } else if (birthDate.includes('/')) {
-    // Formato DD/MM/YYYY
     const [day, month, year] = birthDate.split('/');
     date = new Date(`${year}-${month}-${day}`);
   } else {
@@ -66,7 +63,6 @@ const validateAge = (birthDate: string): { valid: boolean; age: number; error?: 
     return { valid: false, age: 0, error: 'Fecha de nacimiento inválida' };
   }
 
-  // Calcular edad
   const today = new Date();
   let age = today.getFullYear() - date.getFullYear();
   const monthDiff = today.getMonth() - date.getMonth();
@@ -104,10 +100,9 @@ const validateEmail = (email: string): { valid: boolean; error?: string } => {
 };
 
 /**
- * Valida el teléfono (opcional pero si se envía debe ser válido)
+ * Valida el teléfono
  */
 const validatePhone = (phone: string): { valid: boolean; error?: string } => {
-  // Acepta formatos: +5491123456789, 1123456789, (011) 2345-6789
   const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,20}$/;
   
   if (!phoneRegex.test(phone)) {
@@ -121,19 +116,11 @@ const validatePhone = (phone: string): { valid: boolean; error?: string } => {
 
 /**
  * POST /users/register
- * Registro de nuevo usuario con validaciones completas
+ * Registro de nuevo usuario
  */
 router.post('/register', asyncHandler(async (req: any, res: any) => {
-  const { 
-    email, 
-    password, 
-    displayName, 
-    birthDate,
-    phone,
-    acceptTerms 
-  } = req.body;
+  const { email, password, displayName, birthDate, phone, acceptTerms } = req.body;
 
-  // Validaciones básicas
   if (!email || !password || !displayName || !birthDate) {
     throw new ApiError(400, 'Email, contraseña, nombre y fecha de nacimiento son requeridos');
   }
@@ -142,25 +129,21 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Debes aceptar los términos y condiciones');
   }
 
-  // Validar email
   const emailValidation = validateEmail(email);
   if (!emailValidation.valid) {
     throw new ApiError(400, emailValidation.error || 'Email inválido');
   }
 
-  // Validar contraseña
   const passwordValidation = validatePassword(password);
   if (!passwordValidation.valid) {
     throw new ApiError(400, passwordValidation.errors.join('. '));
   }
 
-  // Validar edad
   const ageValidation = validateAge(birthDate);
   if (!ageValidation.valid) {
     throw new ApiError(400, ageValidation.error || 'Edad inválida');
   }
 
-  // Validar teléfono (opcional)
   if (phone) {
     const phoneValidation = validatePhone(phone);
     if (!phoneValidation.valid) {
@@ -168,7 +151,6 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     }
   }
 
-  // Crear usuario en Firebase Auth
   const userRecord = await auth.createUser({
     email,
     password,
@@ -176,7 +158,6 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     emailVerified: false
   });
 
-  // Crear documento en Firestore
   await db.collection('users').doc(userRecord.uid).set({
     email,
     displayName,
@@ -186,10 +167,10 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     role: 'user',
     isEmailVerified: false,
     emailVerifiedAt: null,
-    emailVerificationSentAt: null,
     dniUploaded: false,
     dniUrl: null,
-    dniVerifiedAt: null,
+    dniFileName: null,
+    dniUploadedAt: null,
     faceVerified: false,
     faceVerificationScore: null,
     faceVerifiedAt: null,
@@ -204,7 +185,6 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     lastLoginAt: null
   });
 
-  // Generar custom token
   const customToken = await auth.createCustomToken(userRecord.uid);
 
   res.status(201).json({
@@ -220,12 +200,7 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
       dniUploaded: false,
       faceVerified: false
     },
-    customToken,
-    nextSteps: [
-      'Verifica tu email',
-      'Sube tu documento de identidad',
-      'Completa la verificación facial'
-    ]
+    customToken
   });
 }));
 
@@ -242,7 +217,6 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Email y contraseña son requeridos');
   }
 
-  // Verificar que el usuario existe
   let userRecord;
   try {
     userRecord = await auth.getUserByEmail(email);
@@ -250,7 +224,6 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(401, 'Credenciales inválidas');
   }
 
-  // Obtener datos de Firestore
   const userDoc = await db.collection('users').doc(userRecord.uid).get();
 
   if (!userDoc.exists) {
@@ -259,7 +232,6 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
 
   const userData = userDoc.data();
 
-  // Verificar estado de la cuenta
   if (userData?.accountStatus === 'suspended') {
     throw new ApiError(403, 'Tu cuenta ha sido suspendida. Contacta al soporte.');
   }
@@ -268,12 +240,10 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(403, 'Tu cuenta ha sido bloqueada permanentemente.');
   }
 
-  // Actualizar última fecha de login
   await db.collection('users').doc(userRecord.uid).update({
     lastLoginAt: new Date().toISOString()
   });
 
-  // Generar custom token
   const customToken = await auth.createCustomToken(userRecord.uid);
 
   res.json({
@@ -285,7 +255,6 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
       displayName: userData?.displayName,
       role: userData?.role,
       accountLevel: userData?.accountLevel,
-      // Estados de verificación
       isEmailVerified: userData?.isEmailVerified,
       dniUploaded: userData?.dniUploaded,
       faceVerified: userData?.faceVerified
@@ -297,7 +266,7 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
 
 /**
  * POST /users/send-verification-email
- * Envía email de verificación al usuario autenticado
+ * Envía email de verificación
  */
 router.post('/send-verification-email', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
@@ -306,7 +275,6 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
     throw new ApiError(401, 'Usuario no autenticado');
   }
 
-  // Obtener datos del usuario
   const userDoc = await db.collection('users').doc(userId).get();
   
   if (!userDoc.exists) {
@@ -315,7 +283,6 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
 
   const userData = userDoc.data();
 
-  // Verificar si ya está verificado
   if (userData?.isEmailVerified) {
     return res.json({
       message: 'El email ya está verificado',
@@ -323,33 +290,27 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
     });
   }
 
-  // Generar link de verificación con Firebase Auth
   const email = userData?.email;
   const verificationLink = await auth.generateEmailVerificationLink(email);
 
-  // Actualizar timestamp de envío
   await db.collection('users').doc(userId).update({
     emailVerificationSentAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
 
-  // En producción, aquí enviarías el email con SendGrid, Nodemailer, etc.
-  // Por ahora, devolvemos el link en la respuesta para testing
   console.log('=== LINK DE VERIFICACIÓN ===');
   console.log(verificationLink);
   console.log('===========================');
 
   res.json({
     message: 'Email de verificación enviado exitosamente',
-    // ⚠️ SOLO PARA DESARROLLO - En producción NO devolver el link
-    verificationLink: process.env.NODE_ENV === 'development' ? verificationLink : undefined,
     sentTo: email
   });
 }));
 
 /**
  * POST /users/verify-email
- * Verifica el email del usuario usando el oobCode de Firebase
+ * Verifica el email del usuario
  */
 router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
   const { oobCode } = req.body;
@@ -359,34 +320,22 @@ router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
   }
 
   try {
-    // Verificar el código con Firebase Auth
-    // En el emulador, necesitamos obtener el email del código
-    // y marcarlo como verificado manualmente
-    
-    // NOTA: En producción, Firebase maneja esto automáticamente
-    // cuando el usuario hace click en el link del email
-    
-    // Para el emulador, vamos a usar un enfoque alternativo:
-    // El código oobCode debe venir en el formato: email:code
     const [email] = oobCode.split(':');
     
     if (!email) {
       throw new ApiError(400, 'Código de verificación inválido');
     }
 
-    // Obtener usuario por email
     const userRecord = await auth.getUserByEmail(email);
 
-    // Actualizar en Firebase Auth
     await auth.updateUser(userRecord.uid, {
       emailVerified: true
     });
 
-    // Actualizar en Firestore
     await db.collection('users').doc(userRecord.uid).update({
       isEmailVerified: true,
       emailVerifiedAt: new Date().toISOString(),
-      accountLevel: 'verified', // Upgrade de 'basic' a 'verified'
+      accountLevel: 'verified',
       updatedAt: new Date().toISOString()
     });
 
@@ -411,42 +360,6 @@ router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
   }
 }));
 
-/**
- * GET /users/:id/verification-status
- * Obtiene el estado de verificación del usuario
- */
-router.get('/:id/verification-status', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-
-  // Solo puede ver su propio estado (a menos que sea admin)
-  if (req.user?.uid !== id && req.user?.role !== 'admin') {
-    throw new ApiError(403, 'No autorizado');
-  }
-
-  const userDoc = await db.collection('users').doc(id).get();
-
-  if (!userDoc.exists) {
-    throw new ApiError(404, 'Usuario no encontrado');
-  }
-
-  const userData = userDoc.data();
-
-  res.json({
-    userId: id,
-    email: userData?.email,
-    verificationStatus: {
-      emailVerified: userData?.isEmailVerified || false,
-      emailVerifiedAt: userData?.emailVerifiedAt,
-      dniUploaded: userData?.dniUploaded || false,
-      dniVerifiedAt: userData?.dniVerifiedAt,
-      faceVerified: userData?.faceVerified || false,
-      faceVerifiedAt: userData?.faceVerifiedAt
-    },
-    accountLevel: userData?.accountLevel,
-    accountStatus: userData?.accountStatus
-  });
-}));
-
 // ==================== PERFIL ====================
 
 /**
@@ -456,7 +369,6 @@ router.get('/:id/verification-status', verifyToken, asyncHandler(async (req: Aut
 router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
 
-  // Solo puede ver su propio perfil (a menos que sea admin)
   if (req.user?.uid !== id && req.user?.role !== 'admin') {
     throw new ApiError(403, 'No autorizado para ver este perfil');
   }
@@ -472,7 +384,6 @@ router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
   res.json({
     uid: userDoc.id,
     ...userData,
-    // No enviar datos sensibles
     password: undefined
   });
 }));
@@ -485,7 +396,6 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
   const { id } = req.params;
   const { displayName, photoURL, bio, phone } = req.body;
 
-  // Solo puede actualizar su propio perfil
   if (req.user?.uid !== id) {
     throw new ApiError(403, 'No autorizado para actualizar este perfil');
   }
@@ -508,7 +418,6 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
 
   await db.collection('users').doc(id).update(updateData);
 
-  // También actualizar en Firebase Auth si es displayName o photoURL
   if (displayName || photoURL) {
     const authUpdate: any = {};
     if (displayName) authUpdate.displayName = displayName;
@@ -527,7 +436,7 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
 
 /**
  * GET /users/:id/favorites
- * Obtener películas favoritas del usuario
+ * Obtener películas favoritas
  */
 router.get('/:id/favorites', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
