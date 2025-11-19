@@ -32,8 +32,37 @@ When you're ready, run:
 ```bash
 npm run reset-project
 ```
-
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+
+
+🛠️ Instalación y configuración local
+
+Asegúrate de tener instalada la CLI de Firebase:
+
+npm install -g firebase-tools
+
+
+Entra al directorio functions/:
+
+cd functions
+
+
+Instala las dependencias:
+
+npm install
+
+
+(Opcional) Si usas TypeScript, compila el código:
+
+npm run build
+
+
+Inicia el emulador local para pruebas:
+
+firebase emulators:start 
+
+
+Esto permite ejecutar las funciones sin necesidad de desplegar en producción.
 
 ## Learn more
 
