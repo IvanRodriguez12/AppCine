@@ -8,11 +8,7 @@ const router = Router();
 
 // ==================== FUNCIONES DE VALIDACIÓN ====================
 
-/**
- * Valida imagen base64
- */
 const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: boolean; error?: string } => {
-  // Validar que sea una imagen
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
   if (!allowedTypes.includes(mimeType.toLowerCase())) {
     return { 
@@ -21,16 +17,13 @@ const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: bo
     };
   }
 
-  // Validar que no esté vacío
   if (!imageBase64 || imageBase64.length === 0) {
     return { valid: false, error: 'La imagen está vacía' };
   }
 
-  // Calcular tamaño aproximado en MB (base64 es ~33% más grande que el original)
   const sizeInBytes = (imageBase64.length * 3) / 4;
   const sizeInMB = sizeInBytes / (1024 * 1024);
 
-  // Validar tamaño máximo (5MB)
   if (sizeInMB > 5) {
     return { 
       valid: false, 
@@ -83,7 +76,7 @@ router.post('/upload', verifyToken, asyncHandler(async (req: AuthRequest, res: a
   // Convertir base64 a buffer
   const buffer = Buffer.from(imageBase64, 'base64');
 
-  // Subir archivo a Storage
+  // Subir archivo a Storage (privado)
   await file.save(buffer, {
     metadata: {
       contentType: mimeType,
@@ -92,14 +85,17 @@ router.post('/upload', verifyToken, asyncHandler(async (req: AuthRequest, res: a
         uploadedAt: new Date().toISOString()
       }
     },
-    public: false, // No hacer público por seguridad
+    public: false,
   });
 
   // Obtener URL firmada (válida por 7 días)
   const [url] = await file.getSignedUrl({
     action: 'read',
-    expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 días
+    expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
   });
+
+  console.log('✅ DNI subido exitosamente');
+  console.log('📁 Archivo:', fileName);
 
   // Actualizar usuario en Firestore
   await db.collection('users').doc(userId).update({
@@ -120,7 +116,7 @@ router.post('/upload', verifyToken, asyncHandler(async (req: AuthRequest, res: a
 
 /**
  * GET /dni/status
- * Obtiene el estado de la subida del DNI del usuario autenticado
+ * Obtiene el estado de la subida del DNI
  */
 router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
@@ -150,7 +146,7 @@ router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: an
 
 /**
  * DELETE /dni
- * Elimina el DNI del usuario autenticado
+ * Elimina el DNI del usuario
  */
 router.delete('/', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
@@ -171,14 +167,14 @@ router.delete('/', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
     throw new ApiError(400, 'No hay DNI para eliminar');
   }
 
-  // Eliminar archivo de Storage si existe
+  // Eliminar archivo de Storage
   if (userData?.dniFileName) {
     try {
       const bucket = admin.storage().bucket();
       await bucket.file(userData.dniFileName).delete();
+      console.log('🗑️  DNI eliminado:', userData.dniFileName);
     } catch (error) {
       console.error('Error eliminando archivo de Storage:', error);
-      // Continuar aunque falle la eliminación del archivo
     }
   }
 

@@ -19,7 +19,6 @@ export const verifyToken = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Obtener token del header Authorization
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -32,10 +31,9 @@ export const verifyToken = async (
 
     const token = authHeader.split('Bearer ')[1];
 
-    // Verificar token con Firebase Admin
+    // Verificar token JWT
     const decodedToken = await admin.auth().verifyIdToken(token);
     
-    // Agregar información del usuario al request
     req.user = {
       uid: decodedToken.uid,
       email: decodedToken.email,

@@ -1,8 +1,11 @@
 import * as admin from 'firebase-admin';
 
-// Inicializar Firebase Admin una sola vez
+// Inicializar Firebase Admin
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    storageBucket: 'cineapp-3dy2.appspot.com'
+  });
+  console.log('✅ Firebase Admin initialized');
 }
 
 // Exportar instancias para usar en toda la app

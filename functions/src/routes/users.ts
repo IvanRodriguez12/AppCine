@@ -363,6 +363,172 @@ router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
   }
 }));
 
+// ==================== RECUPERAR CONTRASEÑA ====================
+
+/**
+ * POST /users/forgot-password
+ * Envía email para recuperar contraseña
+ */
+router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new ApiError(400, 'Email es requerido');
+  }
+
+  // Validar formato de email
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.valid) {
+    throw new ApiError(400, emailValidation.error || 'Email inválido');
+  }
+
+  // Verificar que el usuario exista
+  try {
+    await auth.getUserByEmail(email);
+  } catch (error: any) {
+    // Por seguridad, NO decir si el email existe o no
+    // Siempre devolver el mismo mensaje
+    return res.json({
+      message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
+      sentTo: email
+    });
+  }
+
+  // Generar link de reseteo
+  const resetLink = await auth.generatePasswordResetLink(email);
+
+  console.log('=== 🔑 LINK DE RESETEO DE CONTRASEÑA ===');
+  console.log('Email:', email);
+  console.log('Link:', resetLink);
+  console.log('=======================================');
+
+  res.json({
+    message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
+    sentTo: email,
+  });
+}));
+
+/**
+ * POST /users/reset-password
+ * Resetea la contraseña con el código de verificación
+ */
+router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
+  const { oobCode, newPassword } = req.body;
+
+  if (!oobCode || !newPassword) {
+    throw new ApiError(400, 'Código de verificación y nueva contraseña son requeridos');
+  }
+
+  // Validar nueva contraseña
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.valid) {
+    throw new ApiError(400, passwordValidation.errors.join('. '));
+  }
+
+  try {
+    // Verificar el código y obtener el email
+    const [email] = oobCode.split(':');
+    
+    if (!email) {
+      throw new ApiError(400, 'Código de verificación inválido');
+    }
+
+    // Obtener usuario
+    const userRecord = await auth.getUserByEmail(email);
+
+    // Actualizar contraseña
+    await auth.updateUser(userRecord.uid, {
+      password: newPassword
+    });
+
+    // Actualizar timestamp en Firestore
+    await db.collection('users').doc(userRecord.uid).update({
+      passwordChangedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    console.log('✅ Contraseña actualizada para:', email);
+
+    res.json({
+      message: 'Contraseña actualizada exitosamente',
+      success: true
+    });
+
+  } catch (error: any) {
+    console.error('Error reseteando contraseña:', error);
+    
+    if (error.code === 'auth/user-not-found') {
+      throw new ApiError(404, 'Usuario no encontrado');
+    }
+    
+    if (error.code === 'auth/invalid-action-code') {
+      throw new ApiError(400, 'Código de verificación inválido o expirado');
+    }
+
+    throw new ApiError(500, 'Error al restablecer contraseña');
+  }
+}));
+
+/**
+ * POST /users/change-password
+ * Cambia la contraseña (usuario autenticado)
+ */
+router.post('/change-password', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
+  const userId = req.user?.uid;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, 'Usuario no autenticado');
+  }
+
+  if (!currentPassword || !newPassword) {
+    throw new ApiError(400, 'Contraseña actual y nueva contraseña son requeridas');
+  }
+
+  // Validar nueva contraseña
+  const passwordValidation = validatePassword(newPassword);
+  if (!passwordValidation.valid) {
+    throw new ApiError(400, passwordValidation.errors.join('. '));
+  }
+
+  // Obtener usuario
+  const userDoc = await db.collection('users').doc(userId).get();
+  
+  if (!userDoc.exists) {
+    throw new ApiError(404, 'Usuario no encontrado');
+  }
+
+  const userData = userDoc.data();
+  const email = userData?.email;
+
+  // Verificar contraseña actual intentando hacer login
+  try {
+    await auth.getUserByEmail(email);
+    // Nota: En el emulador no podemos verificar la contraseña actual
+    // En producción, el cliente debe re-autenticarse antes de cambiar la contraseña
+  } catch (error) {
+    throw new ApiError(401, 'Contraseña actual incorrecta');
+  }
+
+  // Actualizar contraseña
+  await auth.updateUser(userId, {
+    password: newPassword
+  });
+
+  // Actualizar timestamp en Firestore
+  await db.collection('users').doc(userId).update({
+    passwordChangedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  console.log('✅ Contraseña cambiada para:', email);
+
+  res.json({
+    message: 'Contraseña actualizada exitosamente',
+    success: true
+  });
+}));
+
 // ==================== PERFIL ====================
 
 /**

@@ -37,4 +37,19 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# app-example
 app-example
+
+# Service Account Keys (CRITICAL - Backend)
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Functions build
+functions/lib/
+functions/node_modules/

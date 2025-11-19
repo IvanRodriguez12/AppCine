@@ -4,7 +4,6 @@ import admin from '../config/firebase';
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
 import { verifyFace, validateImageForRekognition } from '../services/rekognitionService';
-import axios from 'axios';
 
 const router = Router();
 
@@ -35,21 +34,6 @@ const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: bo
 
   return { valid: true };
 };
-
-/**
- * Descarga una imagen desde una URL y la convierte a Buffer
- */
-async function downloadImageAsBuffer(url: string): Promise<Buffer> {
-  try {
-    const response = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 10000
-    });
-    return Buffer.from(response.data as ArrayBuffer);
-  } catch (error: any) {
-    throw new Error(`Error descargando imagen: ${error.message}`);
-  }
-}
 
 // ==================== ENDPOINTS ====================
 
@@ -118,7 +102,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   const fileName = `selfies/${userId}_${Date.now()}.${fileExtension}`;
   const file = bucket.file(fileName);
 
-  // Subir selfie a Storage
+  // Subir selfie a Storage (privado)
   await file.save(selfieBuffer, {
     metadata: {
       contentType: mimeType,
@@ -130,7 +114,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     public: false,
   });
 
-  // Obtener URL firmada de la selfie
+  // Obtener URL firmada
   const [selfieUrl] = await file.getSignedUrl({
     action: 'read',
     expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
@@ -139,12 +123,15 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   console.log('=== 🔍 VERIFICACIÓN FACIAL CON AWS REKOGNITION ===');
   console.log('👤 Usuario:', userId);
   console.log('📸 Selfie subida:', fileName);
-  console.log('🪪 DNI URL:', userData?.dniUrl);
 
   try {
-    // Descargar imagen del DNI
-    console.log('⬇️  Descargando DNI...');
-    const dniBuffer = await downloadImageAsBuffer(userData.dniUrl);
+    // Leer DNI directamente desde Storage
+    console.log('⬇️  Leyendo DNI desde Storage...');
+    
+    const dniFile = bucket.file(userData.dniFileName);
+    const [dniBuffer] = await dniFile.download();
+    
+    console.log('✅ DNI leído:', dniBuffer.length, 'bytes');
 
     // Validar DNI
     const dniValidation = validateImageForRekognition(dniBuffer);
@@ -158,7 +145,6 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
 
     console.log('✅ Resultado:', verificationResult.verified ? '✅ VERIFICADO' : '❌ NO VERIFICADO');
     console.log('📊 Similitud:', verificationResult.similarity + '%');
-    console.log('💬 Mensaje:', verificationResult.message);
     console.log('===============================================');
 
     if (!verificationResult.success) {
