@@ -1,21 +1,24 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-import { onRequest } from 'firebase-functions/v2/https';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { onSchedule } from 'firebase-functions/v2/scheduler';
-import express from 'express';
 import cors from 'cors';
+import express from 'express';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 // Inicializar Firebase PRIMERO
 import { db } from './config/firebase';
 
 // Importar rutas
-import userRoutes from './routes/users';
-import dniRoutes from './routes/dni';
-import verificationRoutes from './routes/verification';
-import movieRoutes from './routes/movies';
 import bookingRoutes from './routes/bookings';
+import checkoutRoutes from "./routes/checkoutTicket";
+import dniRoutes from './routes/dni';
+import movieRoutes from './routes/movies';
+import showtimeRoutes from './routes/showtimes';
+import ticketRoutes from './routes/tickets';
+import userRoutes from './routes/users';
+import verificationRoutes from './routes/verification';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -43,7 +46,10 @@ app.use('/users', userRoutes);
 app.use('/dni', dniRoutes);
 app.use('/movies', movieRoutes);
 app.use('/bookings', bookingRoutes);
+app.use("/api/checkout", checkoutRoutes);
 app.use('/verification', verificationRoutes);
+app.use('/showtimes', showtimeRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {
