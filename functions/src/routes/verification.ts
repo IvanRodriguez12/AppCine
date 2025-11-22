@@ -4,14 +4,32 @@ import admin from '../config/firebase';
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
 import { verifyFace, validateImageForRekognition } from '../services/rekognitionService';
+import { User } from '../models/user';
+import { ImageValidation } from '../models/common'; 
+import {
+  VERIFICATION_CONFIG,
+  getConfidenceLevel,
+  isValidVerificationMimeType,
+  generateSelfieFileName,
+  scoreToPercentage,
+  percentageToScore,
+  meetsMinimumThreshold,
+  type FaceVerificationRequest,
+  type FaceVerificationSuccessResponse,
+  type FaceVerificationFailureResponse,
+  type VerificationStatusResponse
+} from '../models/verification'; 
 
 const router = Router();
 
 // ==================== FUNCIONES DE VALIDACIÓN ====================
 
-const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: boolean; error?: string } => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-  if (!allowedTypes.includes(mimeType.toLowerCase())) {
+/**
+ * Valida imagen base64 para verificación facial
+ */
+const validateImageBase64 = (imageBase64: string, mimeType: string): ImageValidation => {
+  // Rekognition solo soporta JPEG y PNG
+  if (!isValidVerificationMimeType(mimeType)) {
     return { 
       valid: false, 
       error: 'Formato inválido. Solo JPEG y PNG son soportados por Rekognition' 
@@ -25,10 +43,10 @@ const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: bo
   const sizeInBytes = (imageBase64.length * 3) / 4;
   const sizeInMB = sizeInBytes / (1024 * 1024);
 
-  if (sizeInMB > 5) {
+  if (sizeInMB > VERIFICATION_CONFIG.MAX_SIZE_MB) {
     return { 
       valid: false, 
-      error: `Imagen demasiado grande (${sizeInMB.toFixed(2)}MB). Máximo: 5MB` 
+      error: `Imagen demasiado grande (${sizeInMB.toFixed(2)}MB). Máximo: ${VERIFICATION_CONFIG.MAX_SIZE_MB}MB` 
     };
   }
 
@@ -43,7 +61,7 @@ const validateImageBase64 = (imageBase64: string, mimeType: string): { valid: bo
  */
 router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const userId = req.user?.uid;
-  const { imageBase64, mimeType } = req.body;
+  const { imageBase64, mimeType }: FaceVerificationRequest = req.body;
 
   if (!userId) {
     throw new ApiError(401, 'Usuario no autenticado');
@@ -66,7 +84,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() as User;
 
   // Verificar que tenga DNI subido
   if (!userData?.dniUploaded || !userData?.dniUrl) {
@@ -75,13 +93,15 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
 
   // Verificar que no esté ya verificado
   if (userData?.faceVerified) {
+    const similarity = userData?.faceVerificationScore 
+      ? scoreToPercentage(userData.faceVerificationScore)
+      : null;
+
     return res.json({
       message: 'El rostro ya está verificado',
       alreadyVerified: true,
       verifiedAt: userData?.faceVerifiedAt,
-      similarity: userData?.faceVerificationScore 
-        ? parseFloat((userData.faceVerificationScore * 100).toFixed(2))
-        : null
+      similarity
     });
   }
 
@@ -97,9 +117,8 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   // Obtener bucket de Storage
   const bucket = admin.storage().bucket();
   
-  // Crear nombre único para la selfie
-  const fileExtension = mimeType.split('/')[1];
-  const fileName = `selfies/${userId}_${Date.now()}.${fileExtension}`;
+  // Generar nombre único para la selfie
+  const fileName = generateSelfieFileName(userId, mimeType);
   const file = bucket.file(fileName);
 
   // Subir selfie a Storage (privado)
@@ -115,9 +134,10 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   });
 
   // Obtener URL firmada
+  const expiryTime = Date.now() + (VERIFICATION_CONFIG.SIGNED_URL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
   const [selfieUrl] = await file.getSignedUrl({
     action: 'read',
-    expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    expires: expiryTime,
   });
 
   console.log('=== 🔍 VERIFICACIÓN FACIAL CON AWS REKOGNITION ===');
@@ -128,7 +148,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     // Leer DNI directamente desde Storage
     console.log('⬇️  Leyendo DNI desde Storage...');
     
-    const dniFile = bucket.file(userData.dniFileName);
+    const dniFile = bucket.file(userData.dniFileName!);
     const [dniBuffer] = await dniFile.download();
     
     console.log('✅ DNI leído:', dniBuffer.length, 'bytes');
@@ -145,6 +165,8 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
 
     console.log('✅ Resultado:', verificationResult.verified ? '✅ VERIFICADO' : '❌ NO VERIFICADO');
     console.log('📊 Similitud:', verificationResult.similarity + '%');
+    console.log('🎯 Umbral mínimo:', VERIFICATION_CONFIG.MIN_SIMILARITY_THRESHOLD + '%');
+    console.log('📈 Nivel de confianza:', getConfidenceLevel(verificationResult.similarity));
     console.log('===============================================');
 
     if (!verificationResult.success) {
@@ -152,7 +174,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     }
 
     // Calcular score normalizado (0-1)
-    const score = verificationResult.similarity / 100;
+    const score = percentageToScore(verificationResult.similarity);
 
     // Actualizar Firestore
     const updateData: any = {
@@ -163,31 +185,38 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
       updatedAt: new Date().toISOString()
     };
 
-    if (verificationResult.verified) {
+    if (verificationResult.verified && meetsMinimumThreshold(verificationResult.similarity)) {
       updateData.faceVerified = true;
       updateData.faceVerifiedAt = new Date().toISOString();
       updateData.accountLevel = 'premium';
+      updateData.lastVerificationError = null;
+    } else {
+      updateData.lastVerificationError = verificationResult.message;
     }
 
     await db.collection('users').doc(userId).update(updateData);
 
     // Respuesta al cliente
     if (verificationResult.verified) {
-      res.json({
+      const successResponse: FaceVerificationSuccessResponse = {
         message: verificationResult.message,
         verified: true,
         similarity: verificationResult.similarity,
         selfieUrl,
         details: verificationResult.details
-      });
+      };
+      
+      res.json(successResponse);
     } else {
-      res.status(400).json({
+      const failureResponse: FaceVerificationFailureResponse = {
         error: 'Verificación facial fallida',
         message: verificationResult.message,
         verified: false,
         similarity: verificationResult.similarity,
         details: verificationResult.details
-      });
+      };
+      
+      res.status(400).json(failureResponse);
     }
 
   } catch (error: any) {
@@ -224,13 +253,18 @@ router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: an
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() as User;
 
-  res.json({
+  // Convertir score a porcentaje si existe
+  const similarity = userData?.faceVerificationScore 
+    ? scoreToPercentage(userData.faceVerificationScore)
+    : null;
+
+  const response: VerificationStatusResponse = {
     userId: userId,
-    email: userData?.email,
-    accountLevel: userData?.accountLevel,
-    accountStatus: userData?.accountStatus,
+    email: userData?.email || '',
+    accountLevel: userData?.accountLevel || 'basic',
+    accountStatus: userData?.accountStatus || 'active',
     verificationStatus: {
       email: {
         verified: userData?.isEmailVerified || false,
@@ -244,14 +278,14 @@ router.get('/status', verifyToken, asyncHandler(async (req: AuthRequest, res: an
       face: {
         verified: userData?.faceVerified || false,
         verifiedAt: userData?.faceVerifiedAt || null,
-        similarity: userData?.faceVerificationScore 
-          ? parseFloat((userData.faceVerificationScore * 100).toFixed(2))
-          : null,
+        similarity,
         lastAttemptAt: userData?.faceVerificationAttemptAt || null,
         lastError: userData?.lastVerificationError || null
       }
     }
-  });
+  };
+
+  res.json(response);
 }));
 
 /**
@@ -271,13 +305,13 @@ router.delete('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: a
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() as User;
 
   if (!userData?.faceVerified && !userData?.selfieUrl) {
     throw new ApiError(400, 'No hay verificación facial para eliminar');
   }
 
-  // Eliminar selfie
+  // Eliminar selfie de Storage
   if (userData?.selfieFileName) {
     try {
       const bucket = admin.storage().bucket();
@@ -285,10 +319,14 @@ router.delete('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: a
       console.log('🗑️  Selfie eliminada:', userData.selfieFileName);
     } catch (error) {
       console.error('Error eliminando selfie:', error);
+      // No lanzar error, continuar con la limpieza de Firestore
     }
   }
 
-  // Limpiar datos
+  // Determinar nuevo accountLevel
+  const newAccountLevel = userData?.isEmailVerified ? 'verified' : 'basic';
+
+  // Limpiar datos de verificación facial
   await db.collection('users').doc(userId).update({
     selfieUrl: null,
     selfieFileName: null,
@@ -296,12 +334,13 @@ router.delete('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: a
     faceVerificationScore: null,
     faceVerifiedAt: null,
     lastVerificationError: null,
-    accountLevel: userData?.isEmailVerified ? 'verified' : 'basic',
+    accountLevel: newAccountLevel,
     updatedAt: new Date().toISOString()
   });
 
   res.json({
-    message: 'Verificación facial eliminada. Puedes intentar de nuevo.'
+    message: 'Verificación facial eliminada. Puedes intentar de nuevo.',
+    accountLevel: newAccountLevel
   });
 }));
 

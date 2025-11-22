@@ -3,6 +3,7 @@ import { db, auth } from '../config/firebase';
 import admin from '../config/firebase'; 
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
+import { createUserInitialData, User, PublicUserProfile, toPublicProfile } from '../models/user';
 
 const router = Router();
 
@@ -151,6 +152,7 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     }
   }
 
+  // Crear usuario en Firebase Auth
   const userRecord = await auth.createUser({
     email,
     password,
@@ -158,35 +160,10 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     emailVerified: false
   });
 
-  await db.collection('users').doc(userRecord.uid).set({
-    email,
-    displayName,
-    phone: phone || null,
-    birthDate,
-    age: ageValidation.age,
-    role: 'user',
-    isEmailVerified: false,
-    emailVerifiedAt: null,
-    dniUploaded: false,
-    dniUrl: null,
-    dniFileName: null,
-    dniUploadedAt: null,
-    faceVerified: false,
-    faceVerificationScore: null,
-    faceVerifiedAt: null,
-    faceVerificationAttemptAt: null,
-    selfieUrl: null,
-    selfieFileName: null,
-    accountStatus: 'active',
-    accountLevel: 'basic',
-    favorites: [],
-    watchlist: [],
-    acceptedTerms: true,
-    acceptedTermsAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    lastLoginAt: null
-  });
+  // Crear documento en Firestore usando el modelo
+  const userData = createUserInitialData(email, displayName, birthDate, ageValidation.age, phone);
+  
+  await db.collection('users').doc(userRecord.uid).set(userData);
 
   const customToken = await auth.createCustomToken(userRecord.uid);
 
@@ -197,8 +174,8 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
       email: userRecord.email,
       displayName: userRecord.displayName,
       age: ageValidation.age,
-      role: 'user',
-      accountLevel: 'basic',
+      role: userData.role,
+      accountLevel: userData.accountLevel,
       isEmailVerified: false,
       dniUploaded: false,
       faceVerified: false
@@ -233,7 +210,7 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() as User;
 
   if (userData?.accountStatus === 'suspended') {
     throw new ApiError(403, 'Tu cuenta ha sido suspendida. Contacta al soporte.');
@@ -284,7 +261,7 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() as User;
 
   if (userData?.isEmailVerified) {
     return res.json({
@@ -376,25 +353,20 @@ router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Email es requerido');
   }
 
-  // Validar formato de email
   const emailValidation = validateEmail(email);
   if (!emailValidation.valid) {
     throw new ApiError(400, emailValidation.error || 'Email inválido');
   }
 
-  // Verificar que el usuario exista
   try {
     await auth.getUserByEmail(email);
   } catch (error: any) {
-    // Por seguridad, NO decir si el email existe o no
-    // Siempre devolver el mismo mensaje
     return res.json({
       message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
       sentTo: email
     });
   }
 
-  // Generar link de reseteo
   const resetLink = await auth.generatePasswordResetLink(email);
 
   console.log('=== 🔑 LINK DE RESETEO DE CONTRASEÑA ===');
@@ -419,29 +391,24 @@ router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Código de verificación y nueva contraseña son requeridos');
   }
 
-  // Validar nueva contraseña
   const passwordValidation = validatePassword(newPassword);
   if (!passwordValidation.valid) {
     throw new ApiError(400, passwordValidation.errors.join('. '));
   }
 
   try {
-    // Verificar el código y obtener el email
     const [email] = oobCode.split(':');
     
     if (!email) {
       throw new ApiError(400, 'Código de verificación inválido');
     }
 
-    // Obtener usuario
     const userRecord = await auth.getUserByEmail(email);
 
-    // Actualizar contraseña
     await auth.updateUser(userRecord.uid, {
       password: newPassword
     });
 
-    // Actualizar timestamp en Firestore
     await db.collection('users').doc(userRecord.uid).update({
       passwordChangedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -485,37 +452,30 @@ router.post('/change-password', verifyToken, asyncHandler(async (req: AuthReques
     throw new ApiError(400, 'Contraseña actual y nueva contraseña son requeridas');
   }
 
-  // Validar nueva contraseña
   const passwordValidation = validatePassword(newPassword);
   if (!passwordValidation.valid) {
     throw new ApiError(400, passwordValidation.errors.join('. '));
   }
 
-  // Obtener usuario
   const userDoc = await db.collection('users').doc(userId).get();
   
   if (!userDoc.exists) {
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() as User;
   const email = userData?.email;
 
-  // Verificar contraseña actual intentando hacer login
   try {
     await auth.getUserByEmail(email);
-    // Nota: En el emulador no podemos verificar la contraseña actual
-    // En producción, el cliente debe re-autenticarse antes de cambiar la contraseña
   } catch (error) {
     throw new ApiError(401, 'Contraseña actual incorrecta');
   }
 
-  // Actualizar contraseña
   await auth.updateUser(userId, {
     password: newPassword
   });
 
-  // Actualizar timestamp en Firestore
   await db.collection('users').doc(userId).update({
     passwordChangedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -548,13 +508,24 @@ router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data();  // ← SIN "as User"
 
-  res.json({
-    uid: userDoc.id,
-    ...userData,
-    password: undefined
-  });
+  if (req.user?.uid === id || req.user?.role === 'admin') {
+    res.json({
+      uid: userDoc.id,
+      ...userData,
+      password: undefined
+    });
+  } else {
+    // Construir User completo con uid
+    const fullUserData = {
+      uid: userDoc.id,
+      ...userData
+    };
+    
+    const publicProfile = toPublicProfile(fullUserData.uid, fullUserData);
+    res.json(publicProfile);
+  }
 }));
 
 /**
