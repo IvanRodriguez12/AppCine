@@ -3,7 +3,8 @@ import { db, auth } from '../config/firebase';
 import admin from '../config/firebase'; 
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { asyncHandler, ApiError } from '../middleware/errorHandler';
-import { createUserInitialData, User, PublicUserProfile, toPublicProfile } from '../models/user';
+import emailService from '../services/emailService';
+import { createUserInitialData, User, toPublicProfile } from '../models/user';
 
 const router = Router();
 
@@ -165,10 +166,26 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
   
   await db.collection('users').doc(userRecord.uid).set(userData);
 
+  // 🚀 ENVIAR EMAIL DE VERIFICACIÓN AUTOMÁTICAMENTE
+  try {
+    const verificationLink = await auth.generateEmailVerificationLink(email);
+    
+    await emailService.sendVerificationEmail({
+      email,
+      displayName,
+      verificationLink
+    });
+    
+    console.log('✅ Email de verificación enviado a:', email);
+  } catch (error) {
+    console.error('⚠️ Error enviando email:', error);
+    // No lanzar error para no bloquear el registro
+  }
+
   const customToken = await auth.createCustomToken(userRecord.uid);
 
   res.status(201).json({
-    message: 'Usuario creado exitosamente',
+    message: 'Usuario creado exitosamente. Revisa tu email para verificar tu cuenta.',
     user: {
       uid: userRecord.uid,
       email: userRecord.email,
@@ -271,16 +288,22 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
   }
 
   const email = userData?.email;
+  const displayName = userData?.displayName;
+  
+  // Generar link de verificación
   const verificationLink = await auth.generateEmailVerificationLink(email);
+
+  // 🚀 ENVIAR EMAIL
+  await emailService.sendVerificationEmail({
+    email,
+    displayName,
+    verificationLink
+  });
 
   await db.collection('users').doc(userId).update({
     emailVerificationSentAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
-
-  console.log('=== LINK DE VERIFICACIÓN ===');
-  console.log(verificationLink);
-  console.log('===========================');
 
   res.json({
     message: 'Email de verificación enviado exitosamente',
@@ -318,6 +341,13 @@ router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
       accountLevel: 'verified',
       updatedAt: new Date().toISOString()
     });
+
+    // 🎉 ENVIAR EMAIL DE BIENVENIDA (OPCIONAL)
+    const userDoc = await db.collection('users').doc(userRecord.uid).get();
+    const userData = userDoc.data() as User;
+    
+    await emailService.sendWelcomeEmail(email, userData?.displayName || 'Usuario')
+      .catch(err => console.error('Error enviando bienvenida:', err));
 
     res.json({
       message: 'Email verificado exitosamente',
@@ -358,21 +388,30 @@ router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, emailValidation.error || 'Email inválido');
   }
 
+  let userRecord;
   try {
-    await auth.getUserByEmail(email);
+    userRecord = await auth.getUserByEmail(email);
   } catch (error: any) {
+    // Respuesta genérica por seguridad
     return res.json({
       message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
       sentTo: email
     });
   }
 
+  // Obtener nombre del usuario
+  const userDoc = await db.collection('users').doc(userRecord.uid).get();
+  const userData = userDoc.data() as User;
+  const displayName = userData?.displayName || 'Usuario';
+
   const resetLink = await auth.generatePasswordResetLink(email);
 
-  console.log('=== 🔑 LINK DE RESETEO DE CONTRASEÑA ===');
-  console.log('Email:', email);
-  console.log('Link:', resetLink);
-  console.log('=======================================');
+  // 🚀 ENVIAR EMAIL DE RESETEO
+  await emailService.sendPasswordResetEmail({
+    email,
+    displayName,
+    resetLink
+  });
 
   res.json({
     message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
@@ -508,7 +547,7 @@ router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  const userData = userDoc.data();  // ← SIN "as User"
+  const userData = userDoc.data();
 
   if (req.user?.uid === id || req.user?.role === 'admin') {
     res.json({

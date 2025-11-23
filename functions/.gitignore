@@ -35,6 +35,7 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 pubsub-debug.log
+.runtimeconfig.json
 
 # IDE
 .idea/

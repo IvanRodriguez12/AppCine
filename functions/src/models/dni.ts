@@ -3,7 +3,7 @@
  * Interfaces y tipos para documentos de identidad (DNI)
  */
 
-import { IMAGE_CONFIG, getBase64SizeInMB } from './common';
+import { IMAGE_CONFIG} from './common';
 
 /**
  * Datos del DNI almacenados en el documento del usuario
