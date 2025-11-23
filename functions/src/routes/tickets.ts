@@ -34,7 +34,7 @@ router.get(
     const data = doc.data() || {};
 
     // Seguridad: solo el dueño puede ver el ticket
-    if (data.userId !== uid) {
+    if ((data as any).userId !== uid) {
       throw new ApiError(403, 'No tienes permiso para ver este ticket');
     }
 
@@ -59,15 +59,17 @@ router.get(
 
     const uid = req.user.uid;
 
-    let query: FirebaseFirestore.Query = db
-      .collection('tickets')
-      .where('userId', '==', uid);
+    let query = db.collection('tickets').where('userId', '==', uid);
 
-    // Si querés, podés ordenar por fecha de creación (si el índice existe)
+    // Si existe índice, los ordenamos por fecha de creación (más recientes primero)
     try {
+      // Si no tenés índice, Firestore tirará error pero lo ignoramos
+      // y devolvemos sin ordenar explícitamente
+      // (esto es solo un plus visual para "Mis compras")
+      // @ts-ignore
       query = query.orderBy('createdAt', 'desc');
     } catch (e) {
-      // Si no hay índice, igual devolvemos sin ordenar explícitamente
+      // no rompemos nada si falla
     }
 
     const snap = await query.get();

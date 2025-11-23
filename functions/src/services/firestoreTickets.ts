@@ -1,4 +1,4 @@
-// src/services/firestoreTickets.ts
+// functions/src/services/firestoreTickets.ts
 import * as admin from 'firebase-admin';
 import { Showtime } from '../models/showtime';
 import { Ticket } from '../models/ticket';
@@ -26,7 +26,7 @@ export async function getShowtimesByMovie(
   return snap.docs.map((doc) => {
     const data = doc.data() as any;
 
-    const showtime: Showtime = {
+    return {
       id: doc.id,
       movieId: data.movieId,
       cinemaId: data.cinemaId,
@@ -34,12 +34,9 @@ export async function getShowtimesByMovie(
       fecha: data.fecha,
       hora: data.hora,
       precioBase: data.precioBase,
-      // Compatibilidad: puede estar guardado como occupiedSeats o asientosOcupados
       asientosOcupados: data.asientosOcupados || data.occupiedSeats || [],
       createdAt: data.createdAt,
-    };
-
-    return showtime;
+    } as Showtime;
   });
 }
 
@@ -55,7 +52,7 @@ export async function getShowtimeWithSeats(showtimeId: string): Promise<Showtime
 
   const data = doc.data() as any;
 
-  const showtime: Showtime = {
+  return {
     id: doc.id,
     movieId: data.movieId,
     cinemaId: data.cinemaId,
@@ -66,18 +63,16 @@ export async function getShowtimeWithSeats(showtimeId: string): Promise<Showtime
     asientosOcupados: data.asientosOcupados || data.occupiedSeats || [],
     createdAt: data.createdAt,
   };
-
-  return showtime;
 }
 
 /**
  * Reserva asientos para un showtime y crea un ticket.
  * Se ejecuta dentro de una transacción para evitar colisiones.
  *
- * - Verifica que el showtime exista
+ * - Verifica que el showtime existe
  * - Verifica que los asientos no estén ocupados
  * - Actualiza occupiedSeats en el showtime
- * - Crea un documento en la colección "tickets"
+ * - Crea un Ticket en Firestore
  */
 export async function reservarAsientos(
   showtimeId: string,
@@ -100,25 +95,21 @@ export async function reservarAsientos(
 
     const data = showtimeSnap.data() as any;
 
-    // Compatibilidad: leer asientos ocupados con cualquiera de los nombres
     const ocupadosActuales: string[] =
       data.asientosOcupados || data.occupiedSeats || [];
 
-    // Verificar que ninguno de los asientos ya esté ocupado
+    // Verificar asientos ocupados
     const conflictos = asientos.filter((a) => ocupadosActuales.includes(a));
-
     if (conflictos.length > 0) {
       throw new Error(
-        `Los siguientes asientos ya no están disponibles: ${conflictos.join(', ')}`
+        `Los siguientes asientos ya están ocupados: ${conflictos.join(', ')}`
       );
     }
 
     const nuevosOcupados = [...ocupadosActuales, ...asientos];
 
-    // Guardamos SIEMPRE en el campo occupiedSeats (que es el que usa bookings.ts)
-    tx.update(showtimeRef, {
-      occupiedSeats: nuevosOcupados,
-    });
+    // Guardamos siempre en el campo "occupiedSeats"
+    tx.update(showtimeRef, { occupiedSeats: nuevosOcupados });
 
     // Crear ticket
     const ticketRef = ticketsCol.doc();

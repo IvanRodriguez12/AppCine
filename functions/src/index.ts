@@ -11,10 +11,8 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from './config/firebase';
 
 // Importar rutas
-import bookingRoutes from './routes/bookings';
-import checkoutRoutes from "./routes/checkoutTicket";
+import checkoutTicketRoutes from './routes/checkoutTicket';
 import dniRoutes from './routes/dni';
-import movieRoutes from './routes/movies';
 import showtimeRoutes from './routes/showtimes';
 import ticketRoutes from './routes/tickets';
 import userRoutes from './routes/users';
@@ -44,12 +42,10 @@ app.get('/health', (req, res) => {
 // Rutas
 app.use('/users', userRoutes);
 app.use('/dni', dniRoutes);
-app.use('/movies', movieRoutes);
-app.use('/bookings', bookingRoutes);
-app.use("/api/checkout", checkoutRoutes);
 app.use('/verification', verificationRoutes);
 app.use('/showtimes', showtimeRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/checkout-ticket', checkoutTicketRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {

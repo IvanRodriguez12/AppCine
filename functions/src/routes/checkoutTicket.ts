@@ -5,13 +5,6 @@ import { reservarAsientos } from '../services/firestoreTickets';
 
 const router = Router();
 
-/**
- * POST /api/checkout
- * Crea un ticket confirmando la reserva de asientos para un showtime.
- * - Verifica datos básicos
- * - Usa reservarAsientos (transacción en Firestore)
- * - Genera un token y una URL de QR usando un servicio externo
- */
 router.post(
   '/',
   verifyToken,
@@ -33,10 +26,6 @@ router.post(
 
     const userId = req.user.uid;
 
-    // Esta función YA existe en services/firestoreTickets.ts:
-    // - Verifica asientos
-    // - Actualiza asientosOcupados del showtime
-    // - Crea el documento en la colección "tickets"
     const { ticketId } = await reservarAsientos(
       showtimeId,
       userId,
@@ -45,7 +34,7 @@ router.post(
       metodoPago || 'no-especificado'
     );
 
-    // Generamos un token simple con datos mínimos del ticket
+    // Generamos un token simple con info del ticket
     const ticketToken = Buffer.from(
       JSON.stringify({
         ticketId,
@@ -55,8 +44,8 @@ router.post(
       })
     ).toString('base64');
 
-    // Usamos un servicio externo para generar la imagen del QR (sin instalar librerías)
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
+    // URL de QR usando servicio externo (sin instalar librerías)
+    const qrCode = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
       ticketToken
     )}&size=300x300`;
 
@@ -64,7 +53,7 @@ router.post(
       message: 'Ticket generado correctamente',
       ticketId,
       ticketToken,
-      qrCode: qrCodeUrl
+      qrCode
     });
   })
 );
