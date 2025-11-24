@@ -11,15 +11,16 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from './config/firebase';
 
 // Importar rutas
+import candyOrdersRoutes from './routes/candyOrders';
+import candyProductsRoutes from './routes/candyProducts';
 import checkoutTicketRoutes from './routes/checkoutTicket';
+import couponsRoutes from './routes/coupons';
 import dniRoutes from './routes/dni';
+import paymentsMpRoutes from './routes/paymentsMP';
 import showtimeRoutes from './routes/showtimes';
 import ticketRoutes from './routes/tickets';
 import userRoutes from './routes/users';
 import verificationRoutes from './routes/verification';
-import candyProductsRoutes from './routes/candyProducts';
-import candyOrdersRoutes from './routes/candyOrders';
-import paymentsMpRoutes from './routes/paymentsMP';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -52,6 +53,7 @@ app.use('/api/checkout-ticket', checkoutTicketRoutes);
 app.use('/api/candy-products', candyProductsRoutes);
 app.use('/api/candy-orders', candyOrdersRoutes);
 app.use('/api/payments/mp', paymentsMpRoutes);
+app.use('/api/coupons', couponsRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {

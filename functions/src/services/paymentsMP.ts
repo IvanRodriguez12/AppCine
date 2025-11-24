@@ -1,6 +1,6 @@
 // functions/src/services/paymentsMp.ts
 import { db } from '../config/firebase';
-import { mpPreference, mpPayment } from '../config/mercadoPago';
+import { mpPayment, mpPreference } from '../config/mercadoPago';
 
 interface CandyItemInput {
   productId: string;
@@ -93,6 +93,81 @@ export async function crearPreferenciaCandyMp(input: CreateCandyPreferenceInput)
       tipo: 'candy',
       items: metadataItems,
       description: description ?? 'Compra Candy Shop',
+    },
+  };
+
+  const preference = await mpPreference.create({ body });
+
+  return {
+    id: preference.id,
+    init_point: (preference as any).init_point,
+    sandbox_init_point: (preference as any).sandbox_init_point,
+  };
+}
+
+interface TicketPreferenceInput {
+  userId: string;
+  showtimeId: string;
+  asientos: string[];
+  total: number;
+  description?: string;
+}
+
+export async function crearPreferenciaTicketMp(
+  input: TicketPreferenceInput
+) {
+  const { userId, showtimeId, asientos, total, description } = input;
+
+  if (!userId) {
+    throw new Error('userId es obligatorio');
+  }
+
+  if (!showtimeId) {
+    throw new Error('showtimeId es obligatorio');
+  }
+
+  if (!asientos || !Array.isArray(asientos) || asientos.length === 0) {
+    throw new Error('Debe enviar al menos un asiento');
+  }
+
+  if (typeof total !== 'number' || total <= 0) {
+    throw new Error('total debe ser un número mayor a 0');
+  }
+
+  // (Opcional pero recomendado) verificar que el showtime exista
+  const showtimeSnap = await db.collection('showtimes').doc(showtimeId).get();
+  if (!showtimeSnap.exists) {
+    throw new Error('Showtime no encontrado');
+  }
+
+  const notificationUrl =
+    process.env.MP_WEBHOOK_URL ||
+    'https://webhook.site/14045216-ec2d-4875-b683-9b49d9421476';
+
+  const body = {
+    items: [
+      {
+        title: `Entradas de cine (${asientos.length} asiento/s)`,
+        quantity: 1,
+        unit_price: total,
+        currency_id: 'ARS',
+      },
+    ],
+    notification_url: notificationUrl,
+    back_urls: {
+      success: 'https://example.com/mp/tickets/success',
+      failure: 'https://example.com/mp/tickets/failure',
+      pending: 'https://example.com/mp/tickets/pending',
+    },
+    auto_return: 'approved' as const,
+    statement_descriptor: 'CineApp Tickets',
+    metadata: {
+      userId,
+      tipo: 'ticket',
+      showtimeId,
+      asientos,
+      total,
+      description: description ?? 'Compra de entradas de cine',
     },
   };
 

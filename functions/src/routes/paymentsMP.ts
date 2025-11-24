@@ -1,7 +1,8 @@
 // functions/src/routes/paymentsMp.ts
 import { Router } from 'express';
-import { crearPreferenciaCandyMp, obtenerPagoMp } from '../services/paymentsMP';
 import { crearOrdenCandyDesdePagoMp } from '../services/candyOrders';
+import { reservarAsientos } from '../services/firestoreTickets';
+import { crearPreferenciaCandyMp, crearPreferenciaTicketMp, obtenerPagoMp } from '../services/paymentsMP';
 
 const router = Router();
 
@@ -26,6 +27,27 @@ router.post('/create-preference', async (req, res) => {
     return res
       .status(400)
       .json({ error: error.message ?? 'Error creando preferencia' });
+  }
+});
+
+router.post('/create-ticket-preference', async (req, res) => {
+  try {
+    const { userId, showtimeId, asientos, total, description } = req.body;
+
+    const preference = await crearPreferenciaTicketMp({
+      userId,
+      showtimeId,
+      asientos,
+      total,
+      description,
+    });
+
+    return res.status(201).json(preference);
+  } catch (error) {
+    console.error('Error creando preferencia MP para tickets:', error);
+    return res
+      .status(500)
+      .json({ error: 'No se pudo crear la preferencia de pago para tickets' });
   }
 });
 
@@ -69,31 +91,66 @@ router.post('/webhook', async (req, res) => {
 
     //Si el pago está aprobado y es de tipo "candy", crear la orden
     if (pago.status === 'approved' && pago.metadata) {
-      const metadata = pago.metadata as any;
+  const metadata = pago.metadata as any;
 
-      if (metadata?.tipo === 'candy') {
-        try {
-          await crearOrdenCandyDesdePagoMp({
-            userId: metadata.userId,
-            items: metadata.items || [],
-            paymentId: String(pago.id),
-            // Si más adelante querés mandar descuento/fee en metadata, los leés acá
-            descuento: 0,
-            feeServicio: 0,
-          });
+  // 1) Compras de Candy (ya existía)
+  if (metadata?.tipo === 'candy') {
+    try {
+      await crearOrdenCandyDesdePagoMp({
+        userId: metadata.userId,
+        items: metadata.items,
+        paymentId: pago.id,
+        descuento: metadata.descuento ?? 0,
+        feeServicio: metadata.feeServicio ?? 0,
+      });
 
-          console.log(
-            `Orden de Candy creada desde pago MP. paymentId=${pago.id}`
-          );
-        } catch (ordenError) {
-          console.error(
-            'Error creando orden de Candy desde webhook MP:',
-            ordenError
-          );
-          // Igual respondemos 200 para que MP no reintente infinitamente
-        }
+      console.log(
+        `Orden de Candy creada desde pago MP. paymentId=${pago.id}`
+      );
+    } catch (ordenError) {
+      console.error(
+        'Error creando orden de Candy desde webhook MP:',
+        ordenError
+      );
+      // Igual respondemos 200 para que MP no reintente infinitamente
+    }
+  }
+
+  // 2) Compras de Tickets (NUEVO)
+  else if (metadata?.tipo === 'ticket') {
+    try {
+      const { userId, showtimeId, asientos, total } = metadata;
+
+      if (
+        !userId ||
+        !showtimeId ||
+        !Array.isArray(asientos) ||
+        asientos.length === 0 ||
+        typeof total !== 'number'
+      ) {
+        console.warn(
+          'Metadata de ticket incompleta en pago MP:',
+          metadata
+        );
+      } else {
+        const { ticketId } = await reservarAsientos(
+          showtimeId,
+          userId,
+          asientos,
+          total,
+          'mercadopago'
+        );
+
+        console.log(
+          `Ticket creado desde pago MP. paymentId=${pago.id}, ticketId=${ticketId}`
+        );
+      }
+    } catch (ticketError) {
+      console.error('Error creando ticket desde webhook MP:', ticketError);
+      // Igual respondemos 200 para que MP no reintente infinitamente
       }
     }
+  }
 
     // Importante: MP puede reenviar el mismo webhook varias veces → siempre responder 200
     return res.status(200).send('ok');
