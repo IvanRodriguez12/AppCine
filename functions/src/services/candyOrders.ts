@@ -132,6 +132,25 @@ export const obtenerOrdenesCandyPorUsuario = async (
   }));
 };
 
+export const obtenerOrdenCandyPorPaymentId = async (
+  paymentId: string
+): Promise<CandyOrder | null> => {
+  if (!paymentId) {
+    throw new Error('paymentId es obligatorio');
+  }
+
+  const snapshot = await db
+    .collection(COLLECTION)
+    .where('paymentId', '==', paymentId)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) return null;
+
+  const doc = snapshot.docs[0];
+  return { ...(doc.data() as CandyOrder), id: doc.id };
+};
+
 export const canjearOrdenCandyPorCodigo = async (
   code: string
 ): Promise<CandyOrder> => {
@@ -220,4 +239,47 @@ export const crearOrdenCandyDesdePagoMp = async (data: {
     paymentMethod: 'mercadopago',
     paymentId,
   });
+};
+
+// Resumen simple de órdenes de Candy
+export const obtenerResumenCandyOrders = async (): Promise<{
+  totalOrders: number;
+  totalPaid: number;
+  totalPending: number;
+  totalCancelled: number;
+  totalRevenue: number; // solo órdenes pagadas
+}> => {
+  const snapshot = await db.collection(COLLECTION).get();
+
+  let totalOrders = 0;
+  let totalPaid = 0;
+  let totalPending = 0;
+  let totalCancelled = 0;
+  let totalRevenue = 0;
+
+  snapshot.forEach((doc) => {
+    const data = doc.data() as CandyOrder;
+    totalOrders++;
+
+    switch (data.paymentStatus) {
+      case 'PAGADO':
+        totalPaid++;
+        totalRevenue += data.total || 0;
+        break;
+      case 'PENDIENTE':
+        totalPending++;
+        break;
+      case 'CANCELADO':
+        totalCancelled++;
+        break;
+    }
+  });
+
+  return {
+    totalOrders,
+    totalPaid,
+    totalPending,
+    totalCancelled,
+    totalRevenue,
+  };
 };
