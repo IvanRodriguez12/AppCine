@@ -6,6 +6,8 @@ import {
   obtenerOrdenCandyPorId,
   obtenerOrdenesCandyPorUsuario,
   canjearOrdenCandyPorCodigo,
+  obtenerOrdenCandyPorPaymentId,  
+  obtenerResumenCandyOrders,
 } from '../services/candyOrders';
 
 const router = Router();
@@ -20,6 +22,47 @@ router.post('/', async (req, res): Promise<void> => {
   } catch (error: any) {
     console.error('Error creando orden de Candy:', error);
     res.status(400).json({ error: error.message ?? 'Error creando orden' });
+    return;
+  }
+});
+
+// GET /api/candy-orders/by-payment/:paymentId
+// Buscar una orden de Candy por el id de pago de Mercado Pago
+router.get('/by-payment/:paymentId', async (req, res): Promise<void> => {
+  try {
+    const { paymentId } = req.params;
+
+    if (!paymentId) {
+      res.status(400).json({ error: 'Debe enviar un paymentId' });
+      return;
+    }
+
+    const orden = await obtenerOrdenCandyPorPaymentId(paymentId);
+
+    if (!orden) {
+      res.status(404).json({ error: 'Orden no encontrada para ese paymentId' });
+      return;
+    }
+
+    res.json(orden);
+    return;
+  } catch (error: any) {
+    console.error('Error obteniendo orden por paymentId:', error);
+    res.status(500).json({ error: 'Error obteniendo orden por paymentId' });
+    return;
+  }
+});
+
+// GET /api/candy-orders/stats/summary
+// Devuelve un resumen general de órdenes de Candy
+router.get('/stats/summary', async (req, res): Promise<void> => {
+  try {
+    const resumen = await obtenerResumenCandyOrders();
+    res.json(resumen);
+    return;
+  } catch (error: any) {
+    console.error('Error obteniendo resumen de órdenes de Candy:', error);
+    res.status(500).json({ error: 'Error obteniendo resumen de órdenes' });
     return;
   }
 });
