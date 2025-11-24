@@ -17,6 +17,9 @@ import showtimeRoutes from './routes/showtimes';
 import ticketRoutes from './routes/tickets';
 import userRoutes from './routes/users';
 import verificationRoutes from './routes/verification';
+import candyProductsRoutes from './routes/candyProducts';
+import candyOrdersRoutes from './routes/candyOrders';
+import paymentsMpRoutes from './routes/paymentsMP';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -46,6 +49,9 @@ app.use('/verification', verificationRoutes);
 app.use('/showtimes', showtimeRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/checkout-ticket', checkoutTicketRoutes);
+app.use('/api/candy-products', candyProductsRoutes);
+app.use('/api/candy-orders', candyOrdersRoutes);
+app.use('/api/payments/mp', paymentsMpRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {

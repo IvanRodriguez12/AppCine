@@ -1,0 +1,107 @@
+// functions/src/routes/paymentsMp.ts
+import { Router } from 'express';
+import { crearPreferenciaCandyMp, obtenerPagoMp } from '../services/paymentsMP';
+import { crearOrdenCandyDesdePagoMp } from '../services/candyOrders';
+
+const router = Router();
+
+/**
+ * POST /api/payments/mp/create-preference
+ * Body esperado:
+ * {
+ *   "userId": "abc123",
+ *   "items": [
+ *     { "productId": "candyId1", "tamanio": "mediano", "quantity": 2 },
+ *     { "productId": "candyId2", "tamanio": "único", "quantity": 1 }
+ *   ],
+ *   "description": "Opcional"
+ * }
+ */
+router.post('/create-preference', async (req, res) => {
+  try {
+    const pref = await crearPreferenciaCandyMp(req.body);
+    return res.status(201).json(pref);
+  } catch (error: any) {
+    console.error('Error creando preferencia MP:', error);
+    return res
+      .status(400)
+      .json({ error: error.message ?? 'Error creando preferencia' });
+  }
+});
+
+/**
+ * POST /api/payments/mp/webhook
+ * Mercado Pago envía notificaciones acá
+ */
+router.post('/webhook', async (req, res) => {
+  try {
+    console.log('Webhook Mercado Pago recibido');
+    console.log('Query:', req.query);
+    console.log('Body:', JSON.stringify(req.body));
+
+    // Formatos típicos:
+    // ?type=payment&data.id=123
+    // ?topic=payment&id=123
+    const paymentId =
+      (req.query['data.id'] as string) ||
+      (req.query.id as string) ||
+      (req.body?.data && req.body.data.id);
+
+    const type =
+      (req.query.type as string) ||
+      (req.query.topic as string) ||
+      req.body?.type;
+
+    if (!paymentId || type !== 'payment') {
+      console.warn('Webhook inválido: falta paymentId o type != payment');
+      return res.status(200).send('ignored');
+    }
+
+    //Consultar el pago en MP
+    const pago: any = await obtenerPagoMp(paymentId);
+
+    console.log(
+      'Pago obtenido desde MP:',
+      pago.id,
+      pago.status,
+      pago.status_detail
+    );
+
+    //Si el pago está aprobado y es de tipo "candy", crear la orden
+    if (pago.status === 'approved' && pago.metadata) {
+      const metadata = pago.metadata as any;
+
+      if (metadata?.tipo === 'candy') {
+        try {
+          await crearOrdenCandyDesdePagoMp({
+            userId: metadata.userId,
+            items: metadata.items || [],
+            paymentId: String(pago.id),
+            // Si más adelante querés mandar descuento/fee en metadata, los leés acá
+            descuento: 0,
+            feeServicio: 0,
+          });
+
+          console.log(
+            `Orden de Candy creada desde pago MP. paymentId=${pago.id}`
+          );
+        } catch (ordenError) {
+          console.error(
+            'Error creando orden de Candy desde webhook MP:',
+            ordenError
+          );
+          // Igual respondemos 200 para que MP no reintente infinitamente
+        }
+      }
+    }
+
+    // Importante: MP puede reenviar el mismo webhook varias veces → siempre responder 200
+    return res.status(200).send('ok');
+  } catch (error) {
+    console.error('Error procesando webhook MP:', error);
+    // Igual respondemos 200 para que MP no siga reintentando indefinidamente
+    return res.status(200).send('ok');
+  }
+});
+
+export default router;
