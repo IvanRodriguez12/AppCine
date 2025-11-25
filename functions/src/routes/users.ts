@@ -231,11 +231,8 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
     lastLoginAt: new Date().toISOString()
   });
 
-  const customToken = await auth.createCustomToken(userRecord.uid);
-
-  res.json({
+    res.json({
     message: 'Login exitoso',
-    customToken,
     user: {
       uid: userRecord.uid,
       email: userData?.email,
@@ -299,6 +296,59 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
     message: 'Email de verificación enviado exitosamente',
     sentTo: email
   });
+}));
+
+/**
+ * POST /users/check-email-verification
+ * Verifica si el email ya fue verificado en Firebase Auth y actualiza Firestore
+ */
+router.post('/check-email-verification', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
+  const userId = req.user?.uid;
+
+  if (!userId) {
+    throw new ApiError(401, 'Usuario no autenticado');
+  }
+
+  // Obtener usuario de Firebase Auth
+  const userRecord = await auth.getUser(userId);
+  
+  // Obtener usuario de Firestore
+  const userDoc = await db.collection('users').doc(userId).get();
+  
+  if (!userDoc.exists) {
+    throw new ApiError(404, 'Usuario no encontrado');
+  }
+
+  const userData = userDoc.data() as User;
+
+  // Si Firebase Auth dice que está verificado pero Firestore no, actualizar Firestore
+  if (userRecord.emailVerified && !userData?.isEmailVerified) {
+    console.log('✅ Sincronizando verificación de email en Firestore');
+    
+    await db.collection('users').doc(userId).update({
+      isEmailVerified: true,
+      emailVerifiedAt: new Date().toISOString(),
+      accountLevel: 'verified',
+      updatedAt: new Date().toISOString()
+    });
+
+    res.json({
+      message: 'Email verificado exitosamente',
+      verified: true,
+      accountLevel: 'verified'
+    });
+  } else if (userData?.isEmailVerified) {
+    res.json({
+      message: 'El email ya está verificado',
+      verified: true,
+      accountLevel: userData?.accountLevel || 'verified'
+    });
+  } else {
+    res.json({
+      message: 'El email aún no ha sido verificado',
+      verified: false
+    });
+  }
 }));
 
 /**

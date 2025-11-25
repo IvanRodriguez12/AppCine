@@ -70,9 +70,9 @@ class AuthService {
         // ✅ Retornar con el campo 'message' requerido
         return {
           success: true,
-          message: 'Usuario registrado y autenticado exitosamente',
+          message: 'Usuario registrado. Por favor verifica tu email.',
           data: {
-            message: 'Usuario registrado y autenticado exitosamente', // ⬅️ AGREGADO
+            message: 'Usuario registrado. Por favor verifica tu email.',
             customToken: firebaseToken,
             user: {
               uid: userCredential.user.uid,
@@ -81,7 +81,7 @@ class AuthService {
               age: 0,
               role: 'user',
               accountLevel: 'basic',
-              isEmailVerified: false,
+              isEmailVerified: false, // ⬅️ Importante: false
               dniUploaded: false,
               faceVerified: false,
             }

@@ -180,12 +180,12 @@ const CrearCuenta = () => {
 
       // Registro Y login exitosos
       Alert.alert(
-        '¡Cuenta Creada!',
-        'Tu cuenta ha sido creada y has iniciado sesión exitosamente. Ahora verifica tu identidad.',
+        'Registro exitoso',
+        'Te hemos enviado un email de verificación. Por favor revisa tu correo.',
         [
           {
             text: 'Continuar',
-            onPress: () => router.replace('/(auth)/verificarIdentidad')
+            onPress: () => router.replace('/(auth)/verificarEmail')
           }
         ]
       );

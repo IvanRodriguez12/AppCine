@@ -10,6 +10,7 @@ export default function AuthLayout() {
       <Stack.Screen name="crearCuenta" />
       <Stack.Screen name="ingresarCorreo" />
       <Stack.Screen name="verificarCorreo" />
+      <Stack.Screen name="verificarEmail" /> {/* ⬅️ NUEVO */}
       <Stack.Screen name="reestablecerContrasena" />
       <Stack.Screen name="verificarIdentidad" />
       <Stack.Screen name="Scan" />

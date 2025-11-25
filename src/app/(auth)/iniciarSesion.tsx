@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/authContext';
 
 const IniciarSesion = () => {
-  const { login } = useAuth();
+  const { login, checkAuthFlow } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -47,7 +47,7 @@ const IniciarSesion = () => {
     }
   };
 
-  const handleLogin = async () => {
+    const handleLogin = async () => {
     // Validaciones
     if (!email || !password) {
       Alert.alert('Error', 'Por favor completa todos los campos');
@@ -63,17 +63,9 @@ const IniciarSesion = () => {
     try {
       await login(email, password);
       
-      // Si llegamos aquí, el login fue exitoso
-      Alert.alert(
-        '¡Bienvenido!',
-        'Inicio de sesión exitoso',
-        [
-          {
-            text: 'Continuar',
-            onPress: () => router.replace('/(auth)/mensajeBienvenida')
-          }
-        ]
-      );
+      // ✅ Verificar el flujo de autenticación
+      await checkAuthFlow();
+      
     } catch (error: any) {
       console.error('Error en login:', error);
       Alert.alert(

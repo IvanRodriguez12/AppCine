@@ -32,12 +32,9 @@ const MensajeBienvenida = () => {
   }, []);
 
   const handleContinue = () => {
-    // Aquí puedes navegar a la pantalla principal de tu app
-    // router.replace('/(tabs)/home');
-    
-    // Por ahora, volvemos al inicio
-    router.replace('/');
-  };
+    // Navegar al menú principal
+    router.replace('/menu/menuPrincipal');
+};
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.darkBg }]}>
