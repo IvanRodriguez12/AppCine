@@ -167,7 +167,7 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
   await db.collection('users').doc(userRecord.uid).set(userData);
 
   // 🚀 ENVIAR EMAIL DE VERIFICACIÓN AUTOMÁTICAMENTE
-  try {
+    try {
     const verificationLink = await auth.generateEmailVerificationLink(email);
     
     await emailService.sendVerificationEmail({
@@ -182,22 +182,12 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     // No lanzar error para no bloquear el registro
   }
 
-  const customToken = await auth.createCustomToken(userRecord.uid);
-
+  // ✅ YA NO GENERAMOS customToken - solo devolvemos success
   res.status(201).json({
+    success: true,
     message: 'Usuario creado exitosamente. Revisa tu email para verificar tu cuenta.',
-    user: {
-      uid: userRecord.uid,
-      email: userRecord.email,
-      displayName: userRecord.displayName,
-      age: ageValidation.age,
-      role: userData.role,
-      accountLevel: userData.accountLevel,
-      isEmailVerified: false,
-      dniUploaded: false,
-      faceVerified: false
-    },
-    customToken
+    userId: userRecord.uid,
+    email: userRecord.email
   });
 }));
 

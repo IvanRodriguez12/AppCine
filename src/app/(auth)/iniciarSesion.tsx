@@ -11,17 +11,20 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/context/authContext';
 
 const IniciarSesion = () => {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const colors = {
     primary: '#E50914',
@@ -45,6 +48,7 @@ const IniciarSesion = () => {
   };
 
   const handleLogin = async () => {
+    // Validaciones
     if (!email || !password) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
@@ -54,28 +58,40 @@ const IniciarSesion = () => {
       return;
     }
 
-    try {
-      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
-      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+    setIsLoading(true);
 
-      const usuario = usuarios.find((u: any) => u.email === email && u.password === password);
-      if (usuario) {
-        await AsyncStorage.setItem('usuarioActual', JSON.stringify(usuario));
-        router.replace('./mensajeBienvenida');
-      } else {
-        Alert.alert('Error', 'Correo o contraseña incorrectos');
-      }
-    } catch (error) {
-      console.error('Error al iniciar sesión:', error);
-      Alert.alert('Error', 'Ocurrió un error al intentar iniciar sesión');
+    try {
+      await login(email, password);
+      
+      // Si llegamos aquí, el login fue exitoso
+      Alert.alert(
+        '¡Bienvenido!',
+        'Inicio de sesión exitoso',
+        [
+          {
+            text: 'Continuar',
+            onPress: () => router.replace('/(auth)/mensajeBienvenida')
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error en login:', error);
+      Alert.alert(
+        'Error al iniciar sesión',
+        error.message || 'Correo o contraseña incorrectos'
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleForgotPassword = () => {
-    router.push('./ingresarCorreo');
+    router.push('/(auth)/ingresarCorreo');
   };
 
-  const handleRegister = () => router.push('./crearCuenta');
+  const handleRegister = () => {
+    router.push('/(auth)/crearCuenta');
+  };
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.darkBg}}>
@@ -122,6 +138,7 @@ const IniciarSesion = () => {
               keyboardType="email-address"
               autoCapitalize="none"
               textContentType="emailAddress"
+              editable={!isLoading}
             />
             {emailError && (
               <Text style={{color: colors.primary, fontSize: moderateScale(12), marginTop: verticalScale(-12), marginBottom: verticalScale(16)}}>
@@ -131,58 +148,72 @@ const IniciarSesion = () => {
             
             <Text style={[styles.label, {color: colors.lightText}]}>Contraseña</Text>
             <View style={{ position: 'relative' }}>
-            <TextInput
-              style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBg,
-                color: colors.lightText,
-                borderColor: colors.divider,
-                paddingRight: moderateScale(50),
-              },
-            ]}
-            placeholder="Ingresa tu contraseña"
-            placeholderTextColor={colors.placeholder}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!mostrarPassword}
-            textContentType="password"
-          />
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              right: moderateScale(10),
-              top: moderateScale(14),
-            }}
-          onPressIn={() => setMostrarPassword(true)}
-          onPressOut={() => setMostrarPassword(false)}
-          >
-          <Ionicons
-            name={mostrarPassword ? 'eye-off' : 'eye'}
-            size={32}
-            color={colors.placeholder}
-          />
-          </TouchableOpacity>
-          </View>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBg,
+                    color: colors.lightText,
+                    borderColor: colors.divider,
+                    paddingRight: moderateScale(50),
+                  },
+                ]}
+                placeholder="Ingresa tu contraseña"
+                placeholderTextColor={colors.placeholder}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!mostrarPassword}
+                textContentType="password"
+                editable={!isLoading}
+              />
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  right: moderateScale(10),
+                  top: moderateScale(14),
+                }}
+                onPressIn={() => setMostrarPassword(true)}
+                onPressOut={() => setMostrarPassword(false)}
+                disabled={isLoading}
+              >
+                <Ionicons
+                  name={mostrarPassword ? 'eye-off' : 'eye'}
+                  size={32}
+                  color={colors.placeholder}
+                />
+              </TouchableOpacity>
+            </View>
             
             <TouchableOpacity 
               style={styles.forgotPassword}
               onPress={handleForgotPassword}
+              disabled={isLoading}
             >
               <Text style={{color: colors.primary}}>¿Olvidaste tu contraseña?</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={[styles.loginButton, {backgroundColor: colors.primary}]}
+              style={[
+                styles.loginButton, 
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isLoading ? 0.7 : 1
+                }
+              ]}
               onPress={handleLogin}
+              disabled={isLoading}
             >
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.lightText} />
+              ) : (
+                <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              )}
             </TouchableOpacity>
           </View>
           
           <View style={styles.registerContainer}>
             <Text style={{color: colors.placeholder}}>¿No tienes cuenta? </Text>
-            <TouchableOpacity onPress={handleRegister}>
+            <TouchableOpacity onPress={handleRegister} disabled={isLoading}>
               <Text style={{color: colors.primary}}>Regístrate</Text>
             </TouchableOpacity>
           </View>

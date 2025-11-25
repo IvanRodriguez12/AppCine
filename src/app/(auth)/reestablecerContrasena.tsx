@@ -11,15 +11,17 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import authService from '@/services/authService';
 
 const ReestablecerContrasena = () => {
-  const { email } = useLocalSearchParams(); // 📌 Email pasado por params
+  const { oobCode } = useLocalSearchParams<{ oobCode: string }>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState({
     length: true,
     uppercase: true,
@@ -38,7 +40,7 @@ const ReestablecerContrasena = () => {
     socialButtonBg: '#1A1A1A'
   };
 
-  const validatePassword = (text) => {
+  const validatePassword = (text: string) => {
     setPassword(text);
     const errors = {
       length: text.length < 8,
@@ -67,33 +69,51 @@ const ReestablecerContrasena = () => {
       return;
     }
 
-    try {
-      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
-      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+    if (!oobCode) {
+      Alert.alert('Error', 'Faltan datos de verificación');
+      return;
+    }
 
-      const index = usuarios.findIndex((u) => u.email === email);
-      if (index === -1) {
-        Alert.alert('Error', 'No se encontró el usuario');
+    setIsLoading(true);
+
+    try {
+      // ✅ Llamar al backend para cambiar la contraseña
+      const result = await authService.resetPassword({
+        oobCode,
+        newPassword: password
+      });
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'No se pudo actualizar la contraseña');
         return;
       }
 
-      usuarios[index].password = password;
-      await AsyncStorage.setItem('usuarios', JSON.stringify(usuarios));
-
-      Alert.alert('Éxito', 'Contraseña actualizada correctamente');
-      router.replace('/(auth)/iniciarSesion');
-
+      // ✅ Mostrar mensaje de éxito y redirigir al login
+      Alert.alert(
+        'Contraseña actualizada',
+        'Tu contraseña ha sido cambiada exitosamente. Inicia sesión con tu nueva contraseña',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace('/(auth)/iniciarSesion');
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error al actualizar contraseña:', error);
-      Alert.alert('Error', 'No se pudo actualizar la contraseña');
+      Alert.alert('Error', 'Ocurrió un error. Inténtalo de nuevo');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const getRequirementStyle = (isError) => ({
-  fontSize: 14,
-  marginBottom: 4,
-  color: isError ? '#E50914' : '#4CAF50'
-});
+  const getRequirementStyle = (isError: boolean) => ({
+    fontSize: moderateScale(14),
+    marginBottom: verticalScale(4),
+    color: isError ? colors.primary : '#4CAF50'
+  });
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.darkBg}}>
@@ -118,7 +138,7 @@ const ReestablecerContrasena = () => {
 
           {/* Título */}
           <Text style={[styles.title, {color: colors.lightText}]}>
-            Reestablecer Contraseña
+            Nueva Contraseña
           </Text>
           
           {/* Subtítulo */}
@@ -147,6 +167,7 @@ const ReestablecerContrasena = () => {
               onChangeText={validatePassword}
               secureTextEntry
               textContentType="newPassword"
+              editable={!isLoading}
             />
 
             {/* Requisitos de contraseña */}
@@ -184,14 +205,26 @@ const ReestablecerContrasena = () => {
               onChangeText={setConfirmPassword}
               secureTextEntry
               textContentType="newPassword"
+              editable={!isLoading}
             />
             
             {/* Botón Continuar */}
             <TouchableOpacity 
-              style={[styles.continueButton, {backgroundColor: colors.primary}]}
+              style={[
+                styles.continueButton, 
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isLoading ? 0.6 : 1
+                }
+              ]}
               onPress={handleContinue}
+              disabled={isLoading}
             >
-              <Text style={styles.continueButtonText}>Continuar</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.continueButtonText}>Actualizar Contraseña</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -243,10 +276,6 @@ const styles = StyleSheet.create({
   requirementsContainer: {
     marginBottom: verticalScale(20),
     paddingLeft: moderateScale(8)
-  },
-  requirementText: {
-    fontSize: moderateScale(14),
-    marginBottom: verticalScale(4)
   },
   continueButton: {
     borderRadius: moderateScale(8),

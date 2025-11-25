@@ -11,18 +11,23 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 import { Ionicons } from '@expo/vector-icons';
+import authService from '@/services/authService';
 
 const CrearCuenta = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [birthDateError, setBirthDateError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const colors = {
     primary: '#E50914',
@@ -43,41 +48,161 @@ const CrearCuenta = () => {
     }
   };
 
+  const validatePassword = (text: string) => {
+    setPassword(text);
+    
+    if (text.length === 0) {
+      setPasswordError('');
+      return;
+    }
+
+    const errors: string[] = [];
+
+    if (text.length < 8) {
+      errors.push('• Mínimo 8 caracteres');
+    }
+
+    if (!/[A-Z]/.test(text)) {
+      errors.push('• Una letra mayúscula');
+    }
+
+    if (!/[a-z]/.test(text)) {
+      errors.push('• Una letra minúscula');
+    }
+
+    if (!/[0-9]/.test(text)) {
+      errors.push('• Un número');
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(text)) {
+      errors.push('• Un caracter especial (!@#$%...)');
+    }
+
+    if (errors.length > 0) {
+      setPasswordError('La contraseña debe tener:\n' + errors.join('\n'));
+    } else {
+      setPasswordError('');
+    }
+  };
+
+  const validateBirthDate = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, '');
+    let formatted = cleaned;
+
+    if (cleaned.length >= 2) {
+      formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    }
+    if (cleaned.length >= 4) {
+      formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4) + '/' + cleaned.slice(4, 8);
+    }
+
+    setBirthDate(formatted);
+
+    if (formatted.length === 10) {
+      const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+      if (!dateRegex.test(formatted)) {
+        setBirthDateError('Formato inválido (DD/MM/AAAA)');
+      } else {
+        const [day, month, year] = formatted.split('/').map(Number);
+        const date = new Date(year, month - 1, day);
+        const today = new Date();
+        let age = today.getFullYear() - date.getFullYear();
+        const monthDiff = today.getMonth() - date.getMonth();
+        
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
+          age--;
+        }
+        
+        if (age < 18) {
+          setBirthDateError('Debes tener al menos 18 años');
+        } else {
+          setBirthDateError('');
+        }
+      }
+    } else if (formatted.length > 0 && formatted.length < 10) {
+      setBirthDateError('Formato incompleto (DD/MM/AAAA)');
+    } else {
+      setBirthDateError('');
+    }
+  };
+
   const handleRegister = async () => {
-    if (!fullName || !email || !password) {
+    // Validaciones
+    if (!fullName || !email || !password || !birthDate) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
+
     if (emailError) {
       Alert.alert('Error', 'Por favor ingresa un correo válido');
       return;
     }
 
-    try {
-      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
-      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+    if (birthDateError) {
+      Alert.alert('Error', birthDateError);
+      return;
+    }
 
-      const existe = usuarios.find((u: any) => u.email === email);
-      if (existe) {
-        Alert.alert('Error', 'Este correo ya está registrado');
+    if (passwordError) {
+      Alert.alert('Error', 'La contraseña no cumple con los requisitos de seguridad');
+      return;
+    }
+
+    if (password.length < 8) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD
+      const [day, month, year] = birthDate.split('/');
+      const formattedBirthDate = `${year}-${month}-${day}`;
+
+      console.log('📤 Iniciando registro...');
+
+      const result = await authService.register({
+        email,
+        password,
+        displayName: fullName,
+        birthDate: formattedBirthDate,
+        acceptTerms: true,
+      });
+
+      if (!result.success) {
+        console.error('❌ Error en registro:', result.error);
+        Alert.alert('Error', result.error || 'No se pudo crear la cuenta');
         return;
       }
 
-      const nuevoUsuario = { fullName, email, password };
-      usuarios.push(nuevoUsuario);
-      await AsyncStorage.setItem('usuarios', JSON.stringify(usuarios));
+      console.log('✅ Registro exitoso');
 
-      Alert.alert('Éxito', 'Cuenta creada correctamente');
-      router.replace('./verificarIdentidad');
+      // Registro Y login exitosos
+      Alert.alert(
+        '¡Cuenta Creada!',
+        'Tu cuenta ha sido creada y has iniciado sesión exitosamente. Ahora verifica tu identidad.',
+        [
+          {
+            text: 'Continuar',
+            onPress: () => router.replace('/(auth)/verificarIdentidad')
+          }
+        ]
+      );
 
-    } catch (error) {
-      console.error('Error al registrar:', error);
-      Alert.alert('Error', 'Ocurrió un error al registrar el usuario');
+    } catch (error: any) {
+      console.error('❌ Error al registrar:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Ocurrió un error al registrar el usuario'
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLoginRedirect = () => {
-    router.push('./iniciarSesion');
+    router.push('/(auth)/iniciarSesion');
   };
 
   return (
@@ -100,7 +225,9 @@ const CrearCuenta = () => {
             }}
           />
           <Text style={[styles.title, {color: colors.lightText}]}>Crear Cuenta</Text>
+          
           <View style={styles.formContainer}>
+            {/* Nombre completo */}
             <Text style={[styles.label, {color: colors.lightText}]}>Nombre completo</Text>
             <TextInput
               style={[
@@ -117,7 +244,10 @@ const CrearCuenta = () => {
               onChangeText={setFullName}
               autoCapitalize="words"
               textContentType="name"
+              editable={!isLoading}
             />
+
+            {/* Correo electrónico */}
             <Text style={[styles.label, {color: colors.lightText}]}>Correo electrónico</Text>
             <TextInput
               style={[
@@ -140,12 +270,40 @@ const CrearCuenta = () => {
               keyboardType="email-address"
               autoCapitalize="none"
               textContentType="emailAddress"
+              editable={!isLoading}
             />
             {emailError && (
               <Text style={{color: colors.primary, fontSize: moderateScale(12), marginTop: verticalScale(-12), marginBottom: verticalScale(16)}}>
                 {emailError}
               </Text>
             )}
+
+            {/* Fecha de nacimiento */}
+            <Text style={[styles.label, {color: colors.lightText}]}>Fecha de nacimiento</Text>
+            <TextInput
+              style={[
+                styles.input, 
+                {
+                  backgroundColor: colors.inputBg,
+                  color: colors.lightText,
+                  borderColor: birthDateError ? colors.primary : colors.divider
+                }
+              ]}
+              placeholder="DD/MM/AAAA"
+              placeholderTextColor={colors.placeholder}
+              value={birthDate}
+              onChangeText={validateBirthDate}
+              keyboardType="numeric"
+              maxLength={10}
+              editable={!isLoading}
+            />
+            {birthDateError && (
+              <Text style={{color: colors.primary, fontSize: moderateScale(12), marginTop: verticalScale(-12), marginBottom: verticalScale(16)}}>
+                {birthDateError}
+              </Text>
+            )}
+
+            {/* Contraseña */}
             <Text style={[styles.label, { color: colors.lightText }]}>Contraseña</Text>
             <View style={{ position: 'relative' }}>
               <TextInput
@@ -154,16 +312,17 @@ const CrearCuenta = () => {
                   {
                     backgroundColor: colors.inputBg,
                     color: colors.lightText,
-                    borderColor: colors.divider,
+                    borderColor: passwordError ? colors.primary : colors.divider,
                     paddingRight: moderateScale(50), 
                   },
                 ]}
-                placeholder="Crea una contraseña"
+                placeholder="Mín. 8 caracteres, mayús, minus, número y especial"
                 placeholderTextColor={colors.placeholder}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={validatePassword}
                 secureTextEntry={!mostrarPassword}
                 textContentType="newPassword"
+                editable={!isLoading}
               />
               <TouchableOpacity
                 style={{
@@ -172,6 +331,7 @@ const CrearCuenta = () => {
                   top: moderateScale(14),
                 }}
                 onPress={() => setMostrarPassword((prev) => !prev)}
+                disabled={isLoading}
               >
                 <Ionicons
                   name={mostrarPassword ? 'eye-off' : 'eye'}
@@ -180,17 +340,42 @@ const CrearCuenta = () => {
                 />
               </TouchableOpacity>
             </View>
+            {passwordError && (
+              <Text style={{
+                color: colors.primary, 
+                fontSize: moderateScale(11), 
+                marginTop: verticalScale(-12), 
+                marginBottom: verticalScale(16),
+                lineHeight: moderateScale(16)
+              }}>
+                {passwordError}
+              </Text>
+            )}
 
+            {/* Botón Crear Cuenta */}
             <TouchableOpacity 
-              style={[styles.registerButton, {backgroundColor: colors.primary}]}
+              style={[
+                styles.registerButton, 
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isLoading ? 0.7 : 1
+                }
+              ]}
               onPress={handleRegister}
+              disabled={isLoading}
             >
-              <Text style={styles.buttonText}>Crear Cuenta</Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.lightText} />
+              ) : (
+                <Text style={styles.buttonText}>Crear Cuenta</Text>
+              )}
             </TouchableOpacity>
           </View>
+
+          {/* Link a iniciar sesión */}
           <View style={styles.loginContainer}>
             <Text style={{color: colors.placeholder}}>¿Ya tienes cuenta? </Text>
-            <TouchableOpacity onPress={handleLoginRedirect}>
+            <TouchableOpacity onPress={handleLoginRedirect} disabled={isLoading}>
               <Text style={{color: colors.primary}}>Inicia Sesión</Text>
             </TouchableOpacity>
           </View>

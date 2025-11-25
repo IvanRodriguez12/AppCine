@@ -8,18 +8,21 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import * as FileSystem from 'expo-file-system';
+import userService from '@/services/userService';
 
 const { width, height } = Dimensions.get('window');
 
 const Scan = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
-  const [scanComplete, setScanComplete] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
   const colors = {
@@ -33,13 +36,8 @@ const Scan = () => {
     socialButtonBg: '#1A1A1A'
   };
 
-  useEffect(() => {
-    // Los permisos ahora se manejan con el hook useCameraPermissions
-  }, []);
-
   const handleStartScan = async () => {
     if (!permission) {
-      // Si no hemos pedido permisos aún
       const newPermission = await requestPermission();
       if (!newPermission.granted) {
         Alert.alert(
@@ -69,26 +67,73 @@ const Scan = () => {
     setShowCamera(true);
     setIsScanning(true);
     
-    // Simular proceso de escaneo
-    setTimeout(() => {
-      setIsScanning(false);
-      setScanComplete(true);
+    // ✅ Esperar 2 segundos y tomar foto automáticamente
+    setTimeout(async () => {
+      await takePicture();
+    }, 2000);
+  };
+
+  const takePicture = async () => {
+    if (!cameraRef.current) {
+      Alert.alert('Error', 'No se pudo acceder a la cámara');
       setShowCamera(false);
+      setIsScanning(false);
+      return;
+    }
+
+    try {
+      // ✅ Tomar foto
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!photo || !photo.base64) {
+        throw new Error('No se pudo capturar la imagen');
+      }
+
+      setIsScanning(false);
+      setShowCamera(false);
+      setIsUploading(true);
+
+      // ✅ Subir selfie al backend para verificación facial
+      const result = await userService.verifyFace({
+        imageBase64: photo.base64,
+        mimeType: 'image/jpeg',
+      });
+
+      setIsUploading(false);
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'No se pudo verificar tu rostro');
+        return;
+      }
+
+      // ✅ Verificación exitosa
+      const verificationData = result.data as any;
+      const similarity = verificationData?.similarity || 0;
+
+      Alert.alert(
+        'Verificación Exitosa',
+        `Tu identidad ha sido verificada correctamente.\nSimilitud: ${(similarity * 100).toFixed(1)}%`,
+        [
+          {
+            text: 'Continuar',
+            onPress: () => router.replace('/(auth)/mensajeBienvenida')
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error en verificación facial:', error);
+      setIsScanning(false);
+      setShowCamera(false);
+      setIsUploading(false);
       
-      // Mostrar mensaje de éxito y navegar
-      setTimeout(() => {
-        Alert.alert(
-          'Verificación Exitosa',
-          'Tu identidad ha sido verificada correctamente',
-          [
-            {
-              text: 'Continuar',
-              onPress: () => router.replace('./mensajeBienvenida')
-            }
-          ]
-        );
-      }, 500);
-    }, 3000);
+      Alert.alert(
+        'Error',
+        error.message || 'No se pudo completar la verificación facial'
+      );
+    }
   };
 
   const handleGoBack = () => {
@@ -99,8 +144,22 @@ const Scan = () => {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.darkBg }]}>
         <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.lightText }]}>
             Cargando permisos de cámara...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isUploading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.darkBg }]}>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.lightText, marginTop: 20 }]}>
+            Verificando tu identidad...
           </Text>
         </View>
       </SafeAreaView>
@@ -135,7 +194,7 @@ const Scan = () => {
                 )}
               </View>
               <Text style={[styles.instructionText, { color: colors.lightText }]}>
-                Coloca tu rostro{'\n'}dentro del círculo
+                {isScanning ? 'Capturando foto...' : 'Coloca tu rostro\ndentro del círculo'}
               </Text>
             </View>
 
@@ -143,7 +202,7 @@ const Scan = () => {
             {isScanning && (
               <View style={styles.progressContainer}>
                 <Text style={[styles.progressText, { color: colors.lightText }]}>
-                  Verificación facial...
+                  Verificando rostro...
                 </Text>
                 <View style={[styles.progressBar, { backgroundColor: colors.divider }]}>
                   <View style={[styles.progressFill, { backgroundColor: colors.primary }]} />
@@ -194,7 +253,7 @@ const Scan = () => {
             Verificación de Identidad
           </Text>
           <Text style={[styles.instructionSubtitle, { color: colors.placeholder }]}>
-            Usaremos tu cámara frontal para verificar tu identidad de forma segura
+            Usaremos tu cámara frontal para verificar que tu rostro coincide con el DNI que subiste
           </Text>
         </View>
 
@@ -204,7 +263,7 @@ const Scan = () => {
             style={[styles.scanButton, { backgroundColor: colors.primary }]}
             onPress={handleStartScan}
           >
-            <Text style={styles.scanButtonText}>Iniciar scan</Text>
+            <Text style={styles.scanButtonText}>Iniciar Verificación</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -220,7 +279,7 @@ const Scan = () => {
         {/* Footer info */}
         <View style={styles.footerInfo}>
           <Text style={[styles.footerText, { color: colors.placeholder }]}>
-            Verificación facial
+            Tu privacidad es importante. La verificación es segura.
           </Text>
         </View>
       </View>
@@ -327,6 +386,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: moderateScale(12),
+    textAlign: 'center',
   },
   
   // Estilos para la cámara

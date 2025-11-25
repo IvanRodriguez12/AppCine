@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 
-const AuthStack = () => {
+export default function AuthLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
@@ -14,9 +14,6 @@ const AuthStack = () => {
       <Stack.Screen name="verificarIdentidad" />
       <Stack.Screen name="Scan" />
       <Stack.Screen name="mensajeBienvenida" />
-      <Stack.Screen name="NovedadesAnuncios" />
     </Stack>
   );
-};
-
-export default AuthStack;
+}

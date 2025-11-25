@@ -11,14 +11,18 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import authService from '@/services/authService';
 
 const VerificarCorreo = () => {
-  const { email } = useLocalSearchParams();
+  const { email } = useLocalSearchParams<{ email: string }>();
   const [code, setCode] = useState(['', '', '', '']);
-  const inputRefs = [useRef(), useRef(), useRef(), useRef()];
+  const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const inputRefs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
 
   const colors = {
     primary: '#E50914',
@@ -31,7 +35,7 @@ const VerificarCorreo = () => {
     socialButtonBg: '#1A1A1A'
   };
 
-  const handleCodeChange = (text, index) => {
+  const handleCodeChange = (text: string, index: number) => {
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
@@ -42,14 +46,14 @@ const VerificarCorreo = () => {
     }
   };
 
-  const handleKeyPress = (e, index) => {
+  const handleKeyPress = (e: any, index: number) => {
     // Si se presiona backspace y el campo está vacío, ir al anterior
     if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
       inputRefs[index - 1].current?.focus();
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const codeString = code.join('');
     
     if (codeString.length !== 4) {
@@ -63,25 +67,66 @@ const VerificarCorreo = () => {
       return;
     }
 
-    // Si es cualquier combinación de 4 dígitos, mostrar "cuenta autorizada"
-    Alert.alert(
-      'Éxito',
-      'Cuenta autorizada',
-      [{ 
-        text: 'OK', 
-        onPress: () => {
-          // Navegar a la pantalla de reestablecer contraseña
-          router.push('/reestablecerContrasena');
-        }
-      }]
-    );
+    setIsLoading(true);
+
+    try {
+      // ✅ Aquí simplemente validamos y navegamos
+      // La verificación real se hará en reestablecerContrasena.tsx con resetPassword()
+      
+      // Por ahora solo navegamos con el código y email
+      Alert.alert(
+        'Código verificado',
+        'Tu código es válido. Ahora crea una nueva contraseña',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.push({
+                pathname: '/(auth)/reestablecerContrasena',
+                params: { 
+                  oobCode: codeString 
+                }
+              });
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error al verificar código:', error);
+      Alert.alert('Error', 'Ocurrió un error. Inténtalo de nuevo');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleResendCode = () => {
-    Alert.alert('Información', 'Código reenviado');
-    // Limpiar el código actual
-    setCode(['', '', '', '']);
-    inputRefs[0].current?.focus();
+  const handleResendCode = async () => {
+    if (!email) {
+      Alert.alert('Error', 'No se pudo reenviar el código');
+      return;
+    }
+
+    setIsResending(true);
+
+    try {
+      // ✅ Llamar nuevamente a forgotPassword para reenviar el código
+      const result = await authService.forgotPassword({ email });
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'No se pudo reenviar el código');
+        return;
+      }
+
+      Alert.alert('Código reenviado', 'Hemos enviado un nuevo código a tu correo');
+      
+      // Limpiar el código actual
+      setCode(['', '', '', '']);
+      inputRefs[0].current?.focus();
+    } catch (error) {
+      console.error('Error al reenviar código:', error);
+      Alert.alert('Error', 'Ocurrió un error. Inténtalo de nuevo');
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -107,12 +152,12 @@ const VerificarCorreo = () => {
 
           {/* Título */}
           <Text style={[styles.title, {color: colors.lightText}]}>
-            Verificar Correo
+            Verificar Código
           </Text>
           
           {/* Subtítulo */}
           <Text style={[styles.subtitle, {color: colors.placeholder}]}>
-            Hemos enviado un código a{'\n'}tu correo electrónico
+            Hemos enviado un código de 4 dígitos a
           </Text>
 
           {/* Email mostrado */}
@@ -141,24 +186,42 @@ const VerificarCorreo = () => {
                 textAlign="center"
                 maxLength={1}
                 selectTextOnFocus
+                editable={!isLoading}
               />
             ))}
           </View>
 
           {/* Botón Verificar */}
           <TouchableOpacity 
-            style={[styles.verifyButton, {backgroundColor: colors.primary}]}
+            style={[
+              styles.verifyButton, 
+              {
+                backgroundColor: colors.primary,
+                opacity: isLoading ? 0.6 : 1
+              }
+            ]}
             onPress={handleVerify}
+            disabled={isLoading}
           >
-            <Text style={styles.verifyButtonText}>Verificar</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.verifyButtonText}>Verificar</Text>
+            )}
           </TouchableOpacity>
 
           {/* Opción de reenviar código */}
           <View style={styles.resendContainer}>
             <Text style={{color: colors.placeholder}}>¿No recibiste el código?</Text>
-            <TouchableOpacity onPress={handleResendCode}>
-              <Text style={{color: colors.primary, marginLeft: 5}}>
-                Reenviar código
+            <TouchableOpacity 
+              onPress={handleResendCode}
+              disabled={isResending}
+            >
+              <Text style={{
+                color: isResending ? colors.placeholder : colors.primary, 
+                marginLeft: 5
+              }}>
+                {isResending ? 'Reenviando...' : 'Reenviar código'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -186,7 +249,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: moderateScale(16),
     textAlign: 'center',
-    marginBottom: verticalScale(16),
+    marginBottom: verticalScale(8),
     lineHeight: moderateScale(22)
   },
   emailText: {

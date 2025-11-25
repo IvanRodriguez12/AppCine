@@ -53,3 +53,5 @@ ui-debug.log
 # Functions build
 functions/lib/
 functions/node_modules/
+
+google-services.json

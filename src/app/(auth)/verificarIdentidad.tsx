@@ -10,14 +10,18 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import userService from '@/services/userService';
 
 const VerificarIdentidad = () => {
-  const [frontImage, setFrontImage] = useState(null);
-  const [backImage, setBackImage] = useState(null);
+  const [frontImage, setFrontImage] = useState<string | null>(null);
+  const [backImage, setBackImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const colors = {
     primary: '#E50914',
@@ -39,7 +43,7 @@ const VerificarIdentidad = () => {
     return true;
   };
 
-  const pickImage = async (type) => {
+  const pickImage = async (type: 'front' | 'back') => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
@@ -48,7 +52,7 @@ const VerificarIdentidad = () => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8, // Reducir calidad para optimizar tamaño
       });
 
       if (!result.canceled) {
@@ -63,28 +67,92 @@ const VerificarIdentidad = () => {
     }
   };
 
-  const handleContinue = () => {
+  const convertImageToBase64 = async (uri: string) => {
+    try {
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      return base64;
+    } catch (error) {
+      console.error('Error converting image to base64:', error);
+      throw new Error('No se pudo procesar la imagen');
+    }
+  };
+
+  const getMimeType = (uri: string): string => {
+    const extension = uri.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      default:
+        return 'image/jpeg';
+    }
+  };
+
+  const handleContinue = async () => {
     if (!frontImage || !backImage) {
       Alert.alert('Error', 'Por favor sube ambas fotos de tu DNI');
       return;
     }
 
-    Alert.alert(
-      'Éxito',
-      'Identidad verificada correctamente',
-      [{ 
-        text: 'OK', 
-        onPress: () => {
-          router.replace('/Scan');
-        }
-      }]
-    );
+    setIsLoading(true);
+
+    try {
+      // ✅ Convertir imagen frontal a base64
+      const frontBase64 = await convertImageToBase64(frontImage);
+      const frontMimeType = getMimeType(frontImage);
+
+      // ✅ Subir DNI frontal al backend
+      const result = await userService.uploadDNI({
+        imageBase64: frontBase64,
+        mimeType: frontMimeType,
+      });
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'No se pudo subir el DNI');
+        return;
+      }
+
+      // ✅ Éxito - Navegar a verificación facial
+      Alert.alert(
+        'DNI Subido',
+        'Tu DNI ha sido enviado correctamente. Ahora realiza la verificación facial.',
+        [
+          {
+            text: 'Continuar',
+            onPress: () => {
+              router.replace('/(auth)/Scan');
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error al subir DNI:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Ocurrió un error al subir el DNI'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const ImageUploadBox = ({ title, image, onPress }) => (
+  const ImageUploadBox = ({ 
+    title, 
+    image, 
+    onPress 
+  }: { 
+    title: string; 
+    image: string | null; 
+    onPress: () => void;
+  }) => (
     <TouchableOpacity 
       style={[styles.imageBox, { borderColor: colors.divider }]}
       onPress={onPress}
+      disabled={isLoading}
     >
       {image ? (
         <Image source={{ uri: image }} style={styles.uploadedImage} />
@@ -129,21 +197,21 @@ const VerificarIdentidad = () => {
           
           {/* Subtítulo */}
           <Text style={[styles.subtitle, {color: colors.placeholder}]}>
-            Saca o sube fotos de tu DNI para verificar{'\n'}tu identidad
+            Sube fotos de tu DNI para verificar{'\n'}tu identidad
           </Text>
 
           {/* Contenedor de imágenes */}
           <View style={styles.imagesContainer}>
             {/* Foto delantera */}
             <ImageUploadBox
-              title="Foto Delantera"
+              title="Foto Delantera del DNI"
               image={frontImage}
               onPress={() => pickImage('front')}
             />
 
             {/* Foto trasera */}
             <ImageUploadBox
-              title="Foto trasera"
+              title="Foto Trasera del DNI"
               image={backImage}
               onPress={() => pickImage('back')}
             />
@@ -155,12 +223,17 @@ const VerificarIdentidad = () => {
               styles.continueButton, 
               { 
                 backgroundColor: colors.primary,
-                opacity: (frontImage && backImage) ? 1 : 0.6
+                opacity: (frontImage && backImage && !isLoading) ? 1 : 0.6
               }
             ]}
             onPress={handleContinue}
+            disabled={!frontImage || !backImage || isLoading}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continuar</Text>
+            )}
           </TouchableOpacity>
 
           {/* Notas informativas */}
@@ -176,6 +249,9 @@ const VerificarIdentidad = () => {
             </Text>
             <Text style={[styles.noteText, {color: colors.placeholder}]}>
               • Evita reflejos o sombras
+            </Text>
+            <Text style={[styles.noteText, {color: colors.placeholder}]}>
+              • La imagen debe ser clara y enfocada
             </Text>
           </View>
         </ScrollView>

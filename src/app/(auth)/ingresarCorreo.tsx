@@ -11,14 +11,16 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
+import authService from '@/services/authService';
 
 const IngresarCorreo = () => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const colors = {
     primary: '#E50914',
@@ -31,15 +33,15 @@ const IngresarCorreo = () => {
     socialButtonBg: '#1A1A1A'
   };
 
-  const validateEmail = (text) => {
-  setEmail(text);
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (text && !emailRegex.test(text)) {
-    setEmailError('Formato inválido (ejemplo: usuario@dominio.com)');
-  } else {
-    setEmailError('');
-  }
-};
+  const validateEmail = (text: string) => {
+    setEmail(text);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (text && !emailRegex.test(text)) {
+      setEmailError('Formato inválido (ejemplo: usuario@dominio.com)');
+    } else {
+      setEmailError('');
+    }
+  };
 
   const handleContinue = async () => {
     if (!email) {
@@ -53,23 +55,39 @@ const IngresarCorreo = () => {
       return;
     }
 
-    try {
-      const usuariosGuardados = await AsyncStorage.getItem('usuarios');
-      const usuarios = usuariosGuardados ? JSON.parse(usuariosGuardados) : [];
+    setIsLoading(true);
 
-      const existe = usuarios.find((u) => u.email === email);
-      if (!existe) {
-        Alert.alert('Error', 'Este correo no está registrado');
+    try {
+      // ✅ Llamar al backend para enviar código de recuperación
+      const result = await authService.forgotPassword({ email });
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'No se pudo enviar el código');
         return;
       }
 
-      router.push({
-        pathname: '/reestablecerContrasena',
-        params: { email }
-      });
+      // ✅ Mostrar mensaje de éxito
+      Alert.alert(
+        'Código enviado',
+        'Hemos enviado un código de verificación a tu correo electrónico',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // ✅ Navegar a verificarCorreo pasando el email
+              router.push({
+                pathname: '/(auth)/verificarCorreo',
+                params: { email }
+              });
+            }
+          }
+        ]
+      );
     } catch (error) {
-      console.error('Error al buscar usuario:', error);
-      Alert.alert('Error', 'No se pudo verificar el correo');
+      console.error('Error al solicitar código:', error);
+      Alert.alert('Error', 'Ocurrió un error. Inténtalo de nuevo');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -96,12 +114,12 @@ const IngresarCorreo = () => {
 
           {/* Título */}
           <Text style={[styles.title, {color: colors.lightText}]}>
-            Ingresar Correo
+            Recuperar Contraseña
           </Text>
           
           {/* Subtítulo */}
           <Text style={[styles.subtitle, {color: colors.placeholder}]}>
-            Ingresa el correo de tu cuenta
+            Ingresa tu correo electrónico y te enviaremos{'\n'}un código de verificación
           </Text>
 
           {/* Formulario */}
@@ -125,21 +143,33 @@ const IngresarCorreo = () => {
               keyboardType="email-address"
               autoCapitalize="none"
               textContentType="emailAddress"
+              editable={!isLoading}
             />
             
             {/* Error del correo */}
-            {emailError && (
+            {emailError ? (
               <Text style={[styles.errorText, {color: colors.primary}]}>
                 {emailError}
               </Text>
-            )}
+            ) : null}
             
             {/* Botón Continuar */}
             <TouchableOpacity 
-              style={[styles.continueButton, {backgroundColor: colors.primary}]}
+              style={[
+                styles.continueButton, 
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isLoading ? 0.6 : 1
+                }
+              ]}
               onPress={handleContinue}
+              disabled={isLoading}
             >
-              <Text style={styles.continueButtonText}>Continuar</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.continueButtonText}>Enviar Código</Text>
+              )}
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -166,7 +196,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: moderateScale(16),
     textAlign: 'center',
-    marginBottom: verticalScale(40)
+    marginBottom: verticalScale(40),
+    lineHeight: moderateScale(22)
   },
   formContainer: {
     width: '100%',
