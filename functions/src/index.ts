@@ -11,16 +11,24 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from './config/firebase';
 
 // Importar rutas
-import candyOrdersRoutes from './routes/candyOrders';
-import candyProductsRoutes from './routes/candyProducts';
 import checkoutTicketRoutes from './routes/checkoutTicket';
-import couponsRoutes from './routes/coupons';
 import dniRoutes from './routes/dni';
-import paymentsMpRoutes from './routes/paymentsMP';
 import showtimeRoutes from './routes/showtimes';
 import ticketRoutes from './routes/tickets';
 import userRoutes from './routes/users';
 import verificationRoutes from './routes/verification';
+import candyProductsRoutes from './routes/candyProducts';
+import candyOrdersRoutes from './routes/candyOrders';
+import paymentsMpRoutes from './routes/paymentsMP';
+
+// 🆕 Importar rutas de admin
+import adminUsersRoutes from './routes/admin/users';
+import adminCandyOrdersRoutes from './routes/admin/candyOrders';
+import adminDashboardRoutes from './routes/admin/dashboard';
+import adminCandyProductsRoutes from './routes/admin/candyProducts';
+import adminShowtimesRoutes from './routes/admin/showtimes';
+import adminTicketsRoutes from './routes/admin/tickets';
+import adminCouponsRoutes from './routes/admin/coupons';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -31,7 +39,7 @@ const app = express();
 
 // Middlewares globales
 app.use(cors({ origin: true }));
-app.use(express.json({ limit: '10mb' })); // Aumentar límite para base64
+app.use(express.json({ limit: '10mb' }));
 app.use(requestLogger);
 
 // Health check
@@ -43,7 +51,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Rutas
+// Rutas públicas/usuario
 app.use('/users', userRoutes);
 app.use('/dni', dniRoutes);
 app.use('/verification', verificationRoutes);
@@ -53,7 +61,15 @@ app.use('/api/checkout-ticket', checkoutTicketRoutes);
 app.use('/api/candy-products', candyProductsRoutes);
 app.use('/api/candy-orders', candyOrdersRoutes);
 app.use('/api/payments/mp', paymentsMpRoutes);
-app.use('/api/coupons', couponsRoutes);
+
+// 🆕 Rutas de admin (requieren autenticación + rol admin)
+app.use('/admin/users', adminUsersRoutes);
+app.use('/admin/dashboard', adminDashboardRoutes);
+app.use('/admin/candy-orders', adminCandyOrdersRoutes);
+app.use('/admin/candy-products', adminCandyProductsRoutes);
+app.use('/admin/showtimes', adminShowtimesRoutes);
+app.use('/admin/tickets', adminTicketsRoutes);
+app.use('/admin/coupons', adminCouponsRoutes);
 
 // Manejo de rutas no encontradas
 app.use('*', (req, res) => {
