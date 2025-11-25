@@ -90,7 +90,7 @@ router.post('/upload', verifyToken, asyncHandler(async (req: AuthRequest, res: a
   // Convertir base64 a buffer
   const buffer = Buffer.from(imageBase64, 'base64');
 
-  // Subir archivo a Storage (privado)
+    // Subir archivo a Storage
   await file.save(buffer, {
     metadata: {
       contentType: mimeType,
@@ -98,23 +98,18 @@ router.post('/upload', verifyToken, asyncHandler(async (req: AuthRequest, res: a
         userId: userId,
         uploadedAt: new Date().toISOString()
       }
-    },
-    public: false,
+    }
   });
 
-  // Obtener URL firmada (válida por X días)
-  const expiryTime = Date.now() + (DNI_CONFIG.SIGNED_URL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-  const [url] = await file.getSignedUrl({
-    action: 'read',
-    expires: expiryTime,
-  });
+  // Generar URL pública del archivo (sin signed URL)
+  const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
 
   console.log('✅ DNI subido exitosamente');
   console.log('📁 Archivo:', fileName);
 
   // Actualizar usuario en Firestore
   await db.collection('users').doc(userId).update({
-    dniUrl: url,
+    dniUrl: publicUrl,
     dniFileName: fileName,
     dniUploaded: true,
     dniUploadedAt: new Date().toISOString(),
@@ -123,13 +118,13 @@ router.post('/upload', verifyToken, asyncHandler(async (req: AuthRequest, res: a
 
   const response: DNIUploadResponse = {
     message: 'DNI subido exitosamente',
-    dniUrl: url,
+    dniUrl: publicUrl,
     dniUploaded: true,
     fileName: fileName
   };
 
   res.json(response);
-}));
+  }));
 
 /**
  * GET /dni/status

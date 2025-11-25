@@ -121,7 +121,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
   const fileName = generateSelfieFileName(userId, mimeType);
   const file = bucket.file(fileName);
 
-  // Subir selfie a Storage (privado)
+  // Subir selfie a Storage
   await file.save(selfieBuffer, {
     metadata: {
       contentType: mimeType,
@@ -129,16 +129,11 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
         userId: userId,
         uploadedAt: new Date().toISOString()
       }
-    },
-    public: false,
+    }
   });
 
-  // Obtener URL firmada
-  const expiryTime = Date.now() + (VERIFICATION_CONFIG.SIGNED_URL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-  const [selfieUrl] = await file.getSignedUrl({
-    action: 'read',
-    expires: expiryTime,
-  });
+  // Generar URL pública del archivo (sin signed URL)
+  const selfieUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
 
   console.log('=== 🔍 VERIFICACIÓN FACIAL CON AWS REKOGNITION ===');
   console.log('👤 Usuario:', userId);
