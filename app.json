@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cineapp.app"
+      "bundleIdentifier": "com.cineapp.app",
+      "googleServicesFile": "./google-services.json"
     },
     "android": {
       "package": "com.cineapp.app",
@@ -18,7 +19,8 @@
         "foregroundImage": "./src/assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",

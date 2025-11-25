@@ -21,7 +21,7 @@ import candyProductsRoutes from './routes/candyProducts';
 import candyOrdersRoutes from './routes/candyOrders';
 import paymentsMpRoutes from './routes/paymentsMP';
 
-// 🆕 Importar rutas de admin
+// Importar rutas de admin
 import adminUsersRoutes from './routes/admin/users';
 import adminCandyOrdersRoutes from './routes/admin/candyOrders';
 import adminDashboardRoutes from './routes/admin/dashboard';
@@ -56,13 +56,13 @@ app.use('/users', userRoutes);
 app.use('/dni', dniRoutes);
 app.use('/verification', verificationRoutes);
 app.use('/showtimes', showtimeRoutes);
-app.use('/api/tickets', ticketRoutes);
-app.use('/api/checkout-ticket', checkoutTicketRoutes);
-app.use('/api/candy-products', candyProductsRoutes);
-app.use('/api/candy-orders', candyOrdersRoutes);
-app.use('/api/payments/mp', paymentsMpRoutes);
+app.use('/tickets', ticketRoutes);
+app.use('/checkout-ticket', checkoutTicketRoutes);
+app.use('/candy-products', candyProductsRoutes);
+app.use('/candy-orders', candyOrdersRoutes);
+app.use('/payments/mp', paymentsMpRoutes);
 
-// 🆕 Rutas de admin (requieren autenticación + rol admin)
+// Rutas de admin (requieren autenticación + rol admin)
 app.use('/admin/users', adminUsersRoutes);
 app.use('/admin/dashboard', adminDashboardRoutes);
 app.use('/admin/candy-orders', adminCandyOrdersRoutes);
@@ -82,37 +82,81 @@ app.use('*', (req, res) => {
 // Middleware de manejo de errores (debe ir al final)
 app.use(errorHandler);
 
-// Exportar como Cloud Function v2
-export const api = onRequest(app);
+// ========================================
+// EXPORTAR COMO CLOUD FUNCTIONS V2 (firebase-functions v5+)
+// ========================================
 
-// Función triggered por Firestore
-export const onUserCreated = onDocumentCreated('users/{userId}', async (event) => {
-  const userData = event.data?.data();
-  const userId = event.params.userId;
-  
-  console.log(`Nuevo usuario creado: ${userId}`, userData);
-});
+// API principal (pública - sin autenticación requerida)
+export const api = onRequest(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 540,
+    memory: '1GiB',
+    cors: true,
+    invoker: 'public' // Permite acceso público sin autenticación
+  },
+  app
+);
 
-// Función programada (cada día a las 00:00)
-export const dailyCleanup = onSchedule({
-  schedule: '0 0 * * *',
-  timeZone: 'America/Argentina/Buenos_Aires'
-}, async (event) => {
-  console.log('Ejecutando limpieza diaria...');
-  
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  const expiredBookings = await db.collection('bookings')
-    .where('status', '==', 'pending')
-    .where('createdAt', '<', yesterday)
-    .get();
-  
-  const batch = db.batch();
-  expiredBookings.docs.forEach((doc) => {
-    batch.update(doc.ref, { status: 'expired' });
-  });
-  
-  await batch.commit();
-  console.log(`${expiredBookings.size} reservas expiradas actualizadas`);
-});
+// Función triggered por Firestore (renombrada para evitar conflictos)
+export const onUserCreatedV2 = onDocumentCreated(
+  {
+    document: 'users/{userId}',
+    region: 'us-central1'
+  },
+  async (event) => {
+    const userData = event.data?.data();
+    const userId = event.params.userId;
+    
+    console.log(`✅ Nuevo usuario creado: ${userId}`, userData);
+    
+    // Aquí puedes agregar lógica adicional:
+    // - Enviar email de bienvenida
+    // - Crear documento relacionado
+    // - Actualizar métricas
+  }
+);
+
+// Función programada (cada día a las 00:00 Argentina) (renombrada para evitar conflictos)
+export const dailyCleanupV2 = onSchedule(
+  {
+    schedule: '0 0 * * *',
+    timeZone: 'America/Argentina/Buenos_Aires',
+    region: 'us-central1',
+    memory: '512MiB'
+  },
+  async (event) => {
+    console.log('🧹 Ejecutando limpieza diaria...');
+    
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // Buscar reservas expiradas
+      const expiredBookings = await db.collection('bookings')
+        .where('status', '==', 'pending')
+        .where('createdAt', '<', yesterday)
+        .get();
+      
+      if (expiredBookings.empty) {
+        console.log('✅ No hay reservas expiradas');
+        return;
+      }
+      
+      // Actualizar en lote
+      const batch = db.batch();
+      expiredBookings.docs.forEach((doc) => {
+        batch.update(doc.ref, { 
+          status: 'expired',
+          expiredAt: new Date()
+        });
+      });
+      
+      await batch.commit();
+      console.log(`✅ ${expiredBookings.size} reservas expiradas actualizadas`);
+    } catch (error) {
+      console.error('❌ Error en limpieza diaria:', error);
+      throw error;
+    }
+  }
+);

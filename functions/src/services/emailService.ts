@@ -1,10 +1,9 @@
 /**
  * services/emailService.ts
- * Servicio para envío de emails usando Nodemailer con Gmail (Cloud Functions)
+ * Servicio para envío de emails usando Nodemailer con Gmail (Cloud Functions v5)
  */
 
 import nodemailer from 'nodemailer';
-import * as functions from 'firebase-functions';
 import { ApiError } from '../middleware/errorHandler';
 
 interface EmailVerificationParams {
@@ -24,14 +23,28 @@ class EmailService {
   private appName = 'CineApp';
 
   constructor() {
-    // Configurar transporter de Gmail usando Firebase Config
-    const gmailUser = functions.config().gmail?.user || process.env.GMAIL_USER;
-    const gmailPassword = functions.config().gmail?.password || process.env.GMAIL_APP_PASSWORD;
+    // En firebase-functions v5, solo usamos variables de entorno
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPassword = process.env.GMAIL_PASSWORD || process.env.GMAIL_APP_PASSWORD;
 
     if (!gmailUser || !gmailPassword) {
       console.error('❌ Gmail credentials not configured');
-      console.error('Run: firebase functions:config:set gmail.user="email" gmail.password="password"');
+      console.error('Set environment variables: GMAIL_USER and GMAIL_PASSWORD');
+      console.error('In Firebase Console: https://console.firebase.google.com/project/_/functions/env');
+      
+      // Crear transporter vacío para evitar errores
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'dummy@gmail.com',
+          pass: 'dummy'
+        }
+      });
+      return;
     }
+
+    console.log('✅ Gmail credentials found');
+    console.log('📧 Gmail user:', gmailUser);
 
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -58,13 +71,20 @@ class EmailService {
   }
 
   /**
+   * Obtiene el email del remitente
+   */
+  private getFromEmail(): string {
+    return process.env.GMAIL_USER || 'noreply@cineapp.com';
+  }
+
+  /**
    * Envía email de verificación
    */
   async sendVerificationEmail(params: EmailVerificationParams): Promise<void> {
     const { email, displayName, verificationLink } = params;
 
     const mailOptions = {
-      from: `"${this.appName}" <${functions.config().gmail?.user || process.env.GMAIL_USER}>`,
+      from: `"${this.appName}" <${this.getFromEmail()}>`,
       to: email,
       subject: `Verifica tu cuenta en ${this.appName}`,
       html: `
@@ -222,7 +242,7 @@ class EmailService {
     const { email, displayName, resetLink } = params;
 
     const mailOptions = {
-      from: `"${this.appName}" <${functions.config().gmail?.user || process.env.GMAIL_USER}>`,
+      from: `"${this.appName}" <${this.getFromEmail()}>`,
       to: email,
       subject: `Restablece tu contraseña en ${this.appName}`,
       html: `
@@ -384,7 +404,7 @@ class EmailService {
    */
   async sendWelcomeEmail(email: string, displayName: string): Promise<void> {
     const mailOptions = {
-      from: `"${this.appName}" <${functions.config().gmail?.user || process.env.GMAIL_USER}>`,
+      from: `"${this.appName}" <${this.getFromEmail()}>`,
       to: email,
       subject: `¡Bienvenido a ${this.appName}! 🎉`,
       html: `
