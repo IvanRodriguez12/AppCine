@@ -144,9 +144,10 @@ export async function crearPreferenciaTicketMp(
     process.env.MP_WEBHOOK_URL ||
     'https://webhook.site/14045216-ec2d-4875-b683-9b49d9421476';
 
-  const body = {
+   const body = {
     items: [
       {
+        id: `ticket-${showtimeId}`, // 👈 línea nueva para satisfacer el tipo Items
         title: `Entradas de cine (${asientos.length} asiento/s)`,
         quantity: 1,
         unit_price: total,
