@@ -702,6 +702,39 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
   });
 }));
 
+/**
+ * DELETE /users/:id
+ * Eliminar cuenta de usuario permanentemente
+ */
+router.delete('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+
+  // Solo el propio usuario puede eliminar su cuenta
+  if (req.user?.uid !== id) {
+    throw new ApiError(403, 'No autorizado para eliminar esta cuenta');
+  }
+
+  console.log('🗑️ Eliminando cuenta:', id);
+
+  try {
+    // 1. Eliminar documento de Firestore
+    await db.collection('users').doc(id).delete();
+    console.log('✅ Documento de Firestore eliminado');
+
+    // 2. Eliminar usuario de Firebase Auth
+    await auth.deleteUser(id);
+    console.log('✅ Usuario eliminado de Firebase Auth');
+
+    res.json({
+      message: 'Cuenta eliminada exitosamente',
+      success: true
+    });
+  } catch (error: any) {
+    console.error('❌ Error eliminando cuenta:', error);
+    throw new ApiError(500, 'Error al eliminar la cuenta');
+  }
+}));
+
 // ==================== FAVORITOS ====================
 
 /**
