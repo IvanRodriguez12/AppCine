@@ -94,21 +94,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // 🆕 SI ES ADMIN, IR DIRECTO AL DASHBOARD
+    if (currentUser.role === 'admin') {
+      console.log('👑 Usuario admin detectado, redirigiendo a dashboard');
+      router.replace('/(admin)/dashboard');
+      return;
+    }
+
+    // FLUJO NORMAL PARA USUARIOS
     if (!currentUser.isEmailVerified) {
+      console.log('📧 Email no verificado');
       router.replace('/(auth)/verificarEmail');
       return;
     }
 
     if (!currentUser.dniUploaded) {
+      console.log('🪪 DNI no subido');
       router.replace('/(auth)/verificarIdentidad');
       return;
     }
 
     if (!currentUser.faceVerified) {
+      console.log('👤 Rostro no verificado');
       router.replace('/(auth)/Scan');
       return;
     }
 
+    console.log('✅ Verificación completa');
     router.replace('/(auth)/mensajeBienvenida');
   };
 
