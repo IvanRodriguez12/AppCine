@@ -22,13 +22,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 import ConfirmLogout from './ConfirmLogout';
 import SessionClosed from './SessionClosed';
+import { useAuth } from '@/context/authContext'; // ✅ IMPORTAR useAuth
 
 const { width, height } = Dimensions.get('window');
 
 const MenuLateral = ({ onClose }: { onClose: () => void }) => {
   const router = useRouter();
-  const [nombre, setNombre] = useState('Usuario');
-  const [correo, setCorreo] = useState('correo@gmail.com');
+  const { user } = useAuth(); // ✅ OBTENER USUARIO DEL CONTEXTO
+  
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
   const [showSessionClosed, setShowSessionClosed] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -38,16 +39,21 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
   const slideAnim = useRef(new Animated.Value(-width * 0.75)).current;
   const thanksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const u = await AsyncStorage.getItem('usuarioActual');
-      if (u) {
-        const user = JSON.parse(u);
-        if (user.fullName) setNombre(user.fullName);
-        if (user.email) setCorreo(user.email);
-      }
-    })();
+  // ✅ OBTENER NOMBRE Y EMAIL DEL USUARIO AUTENTICADO
+  const nombre = user?.displayName || 'Usuario';
+  const correo = user?.email || 'correo@gmail.com';
 
+  // ✅ GENERAR INICIALES DINÁMICAMENTE
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  };
+
+  useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 300,
@@ -56,29 +62,25 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
   }, []);
 
   // Efecto para manejar el auto-cierre del modal de agradecimiento
-useEffect(() => {
-  if (showThanksModal) {
-    // Configurar el timer para cerrar después de 3 segundos
-    thanksTimerRef.current = setTimeout(() => {
-      handleThanksClose();
-    }, 3000);
-  } else {
-    // Limpiar el timer si el modal no está visible
-    if (thanksTimerRef.current) {
-      clearTimeout(thanksTimerRef.current);
-      thanksTimerRef.current = null;
+  useEffect(() => {
+    if (showThanksModal) {
+      thanksTimerRef.current = setTimeout(() => {
+        handleThanksClose();
+      }, 3000);
+    } else {
+      if (thanksTimerRef.current) {
+        clearTimeout(thanksTimerRef.current);
+        thanksTimerRef.current = null;
+      }
     }
-  }
 
-  // Cleanup function para limpiar el timer cuando el componente se desmonte
-  return () => {
-    if (thanksTimerRef.current) {
-      clearTimeout(thanksTimerRef.current);
-      thanksTimerRef.current = null;
-    }
-  };
-}, [showThanksModal]);
-
+    return () => {
+      if (thanksTimerRef.current) {
+        clearTimeout(thanksTimerRef.current);
+        thanksTimerRef.current = null;
+      }
+    };
+  }, [showThanksModal]);
 
   const handleLogoutPress = () => {
     setShowConfirmLogout(true);
@@ -121,7 +123,6 @@ useEffect(() => {
   const handleThanksClose = () => {
     setShowThanksModal(false);
     setRating(0);
-    // Limpiar el timer si se cierra manualmente
     if (thanksTimerRef.current) {
       clearTimeout(thanksTimerRef.current);
       thanksTimerRef.current = null;
@@ -208,56 +209,56 @@ useEffect(() => {
         <TouchableOpacity style={styles.backdrop} onPress={onClose} />
 
         <Animated.View style={[styles.menu, { transform: [{ translateX: slideAnim }] }]}>
+          {/* ✅ SECCIÓN DE USUARIO CON DATOS REALES */}
           <View style={styles.userSection}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {nombre.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                {getInitials(nombre)}
               </Text>
             </View>
             <View>
               <Text style={styles.userName}>{nombre}</Text>
               <Text style={styles.userEmail}>{correo}</Text>
             </View>
-</View>
+          </View>
 
-<TouchableOpacity
-  style={styles.menuItem}
-  onPress={() => {
-    onClose();
-    router.push('/menu/Cupones');
-  }}
->
-  <Ionicons name="pricetags-outline" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-  <Text style={styles.menuItemText}>Cupones</Text>
-</TouchableOpacity>
-<TouchableOpacity
-  style={styles.menuItem}
-  onPress={() => {
-    onClose();
-    router.push('/menu/MisCompras');
-  }}
->
-  <AntDesign name="shoppingcart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-  <Text style={styles.menuItemText}>Mis Compras</Text>
-</TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => {
+              onClose();
+              router.push('/menu/Cupones');
+            }}
+          >
+            <Ionicons name="pricetags-outline" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Cupones</Text>
+          </TouchableOpacity>
 
-          {/* Sección de ubicación */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => {
+              onClose();
+              router.push('/menu/MisCompras');
+            }}
+          >
+            <AntDesign name="shoppingcart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Mis Compras</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/Ubicacion')}>
             <Entypo name="location-pin" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
             <Text style={styles.menuItemText}>Ubicación</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisReviews')}>
-          <AntDesign name="checkcircleo" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-          <Text style={styles.menuItemText}>Mis Reviews</Text>
+            <AntDesign name="checkcircleo" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Mis Reviews</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisFavoritos')}>
-          <AntDesign name="heart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-          <Text style={styles.menuItemText}>Mis Favoritos</Text>
+            <AntDesign name="heart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+            <Text style={styles.menuItemText}>Mis Favoritos</Text>
           </TouchableOpacity>
           
-          {/* Sección de calificación */}
           <TouchableOpacity style={styles.menuItem} onPress={handleRatingPress}>
             <AntDesign name="star" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
             <Text style={styles.menuItemText}>Calificar en Estrellas</Text>
@@ -265,34 +266,34 @@ useEffect(() => {
 
           <View style={styles.separator} />
 
+          <View>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/SobreNosotros')}>
+              <AntDesign name="info" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+              <Text style={styles.menuItemText}>Sobre Nosotros</Text>
+            </TouchableOpacity>
 
-<View>
-  <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/SobreNosotros')}>
-    <AntDesign name="info" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-    <Text style={styles.menuItemText}>Sobre Nosotros</Text>
-  </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                onClose();
+                router.push('/menu/MiCuenta');
+              }}
+            >
+              <Ionicons name="person" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+              <Text style={styles.menuItemText}>Mi Cuenta</Text>
+            </TouchableOpacity>
 
-  <TouchableOpacity
-    style={styles.menuItem}
-    onPress={() => {
-      onClose();
-      router.push('/menu/MiCuenta');
-    }}
-  >
-    <Ionicons name="person" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-    <Text style={styles.menuItemText}>Mi Cuenta</Text>
-  </TouchableOpacity>
-  <TouchableOpacity
-    style={styles.menuItem}
-    onPress={() => {
-      onClose();
-      router.push('/menu/ConfiguracionApp');
-    }}
-  >
-    <Feather name="settings" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-    <Text style={styles.menuItemText}>Configuración</Text>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                onClose();
+                router.push('/menu/ConfiguracionApp');
+              }}
+            >
+              <Feather name="settings" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
+              <Text style={styles.menuItemText}>Configuración</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogoutPress}>
             <View style={styles.menuItem}>
@@ -303,11 +304,9 @@ useEffect(() => {
         </Animated.View>
       </SafeAreaView>
 
-      {/* Modales */}
       <RatingModal />
       <ThanksModal />
 
-      {/* Modal de confirmación de cierre de sesión */}
       <ConfirmLogout
         visible={showConfirmLogout}
         onConfirm={handleConfirmLogout}
@@ -316,30 +315,11 @@ useEffect(() => {
         userEmail={correo}
       />
 
-      {/* Modal de sesión cerrada */}
       <SessionClosed
         visible={showSessionClosed}
         onComplete={handleSessionClosedComplete}
       />
     </>
-  );
-};
-
-const MenuItem = ({
-  icon,
-  text,
-  library = 'MaterialIcons'
-}: {
-  icon: string;
-  text: string;
-  library?: 'MaterialIcons' | 'Entypo' | 'AntDesign' | 'Feather' | 'Ionicons';
-}) => {
-  const Icon = { MaterialIcons, Entypo, AntDesign, Feather, Ionicons }[library];
-  return (
-    <TouchableOpacity style={styles.menuItem}>
-      <Icon name={icon as any} size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-      <Text style={styles.menuItemText}>{text}</Text>
-    </TouchableOpacity>
   );
 };
 
@@ -423,19 +403,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: moderateScale(16)
   },
-  // Estilos para los modales
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: moderateScale(20)
-  },
-  keyboardContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%'
   },
   modalContent: {
     backgroundColor: '#1a1a1a',
@@ -476,19 +449,6 @@ const styles = StyleSheet.create({
   },
   starButton: {
     marginHorizontal: moderateScale(5)
-  },
-  commentContainer: {
-    width: '100%',
-    marginBottom: verticalScale(25)
-  },
-  commentInput: {
-    backgroundColor: '#333',
-    borderRadius: moderateScale(10),
-    padding: moderateScale(15),
-    color: 'white',
-    fontSize: moderateScale(16),
-    minHeight: verticalScale(100),
-    textAlignVertical: 'top'
   },
   modalButtons: {
     flexDirection: 'row',

@@ -6,7 +6,6 @@ import authService from '../services/authService';
 import apiClient from '../api/client';
 import { USER_ENDPOINTS } from '../api/endpoints';
 
-// Tipo del contexto
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -17,15 +16,12 @@ interface AuthContextType {
   checkAuthFlow: () => Promise<void>;
 }
 
-// Crear contexto
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Provider
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Verificar sesión al montar
   useEffect(() => {
     checkAuth();
   }, []);
@@ -50,12 +46,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     const result = await authService.login({ email, password });
-    
     if (!result.success) {
       throw new Error(result.error || 'Error al iniciar sesión');
     }
-
-    // El usuario ya fue guardado por authService
     await refreshUser();
   };
 
@@ -68,20 +61,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshUser = async () => {
     try {
       const storedUser = await getUser();
-      
+
       if (storedUser) {
-        // Obtener datos actualizados del backend
         const response = await apiClient.get(`/users/${storedUser.uid}`);
-        
+
         if (response.data) {
           const updatedUser = {
-            ...storedUser,
-            isEmailVerified: response.data.isEmailVerified || false,
-            dniUploaded: response.data.dniUploaded || false,
-            faceVerified: response.data.faceVerified || false,
-            accountLevel: response.data.accountLevel || 'basic',
+            ...storedUser,                 // ⬅️ NO SE PIERDEN DATOS LOCALES
+            ...response.data,              // ⬅️ SE ACTUALIZAN DATOS DEL BACKEND (ej. nombre)
           };
-          
+
           await saveUser(updatedUser);
           setUser(updatedUser);
         } else {
@@ -95,46 +84,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // ✅ FUNCIÓN CLAVE: Verifica qué pantalla mostrar según el estado del usuario
   const checkAuthFlow = async () => {
-    // Primero refrescar el usuario para obtener datos actualizados
     await refreshUser();
-    
+
     const currentUser = await getUser();
-    
+
     if (!currentUser) {
       router.replace('/(auth)/iniciarSesion');
       return;
     }
 
-    console.log('🔍 Verificando flujo de autenticación...');
-    console.log('📧 Email verificado:', currentUser.isEmailVerified);
-    console.log('🪪 DNI subido:', currentUser.dniUploaded);
-    console.log('👤 Rostro verificado:', currentUser.faceVerified);
-
-    // 1️⃣ Si NO verificó email → pantalla de verificación de email
     if (!currentUser.isEmailVerified) {
-      console.log('➡️  Redirigiendo a verificar email');
       router.replace('/(auth)/verificarEmail');
       return;
     }
 
-    // 2️⃣ Si NO subió DNI → pantalla de subir DNI
     if (!currentUser.dniUploaded) {
-      console.log('➡️  Redirigiendo a verificar identidad');
       router.replace('/(auth)/verificarIdentidad');
       return;
     }
 
-    // 3️⃣ Si NO verificó rostro → pantalla de verificación facial
     if (!currentUser.faceVerified) {
-      console.log('➡️  Redirigiendo a scan facial');
       router.replace('/(auth)/Scan');
       return;
     }
 
-    // 4️⃣ Si completó todo → mensaje de bienvenida
-    console.log('✅ Verificación completa - Redirigiendo a bienvenida');
     router.replace('/(auth)/mensajeBienvenida');
   };
 
@@ -151,13 +125,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Hook personalizado para usar el contexto
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
+
   if (context === undefined) {
     throw new Error('useAuth debe ser usado dentro de un AuthProvider');
   }
-  
+
   return context;
 };
