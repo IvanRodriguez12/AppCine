@@ -67,23 +67,6 @@ router.get('/stats/summary', async (req, res): Promise<void> => {
   }
 });
 
-// GET /api/candy-orders/:id
-// Ver detalle de una orden
-router.get('/:id', async (req, res): Promise<void> => {
-  try {
-    const orden = await obtenerOrdenCandyPorId(req.params.id);
-    if (!orden) {
-      res.status(404).json({ error: 'Orden no encontrada' });
-      return;
-    }
-    res.json(orden);
-    return;
-  } catch (error: any) {
-    console.error('Error obteniendo orden de Candy:', error);
-    res.status(500).json({ error: 'Error obteniendo orden' });
-    return;
-  }
-});
 
 // GET /api/candy-orders/user/:userId
 // Historial de órdenes de Candy de un usuario
@@ -103,17 +86,17 @@ router.get('/user/:userId', async (req, res): Promise<void> => {
 router.get('/redeem/:code', async (req, res) => {
   try {
     const code = req.params.code.trim().toUpperCase();
-
+    
     const snap = await db
-      .collection('candyOrders')
-      .where('redeemCode', '==', code)
-      .limit(1)
-      .get();
-
+    .collection('candyOrders')
+    .where('redeemCode', '==', code)
+    .limit(1)
+    .get();
+    
     if (snap.empty) {
       return res.status(404).json({ error: 'Código inválido' });
     }
-
+    
     const doc = snap.docs[0];
     return res.json({ id: doc.id, ...doc.data() });
   } catch (error) {
@@ -127,18 +110,36 @@ router.get('/redeem/:code', async (req, res) => {
 router.post('/redeem', async (req, res): Promise<void> => {
   try {
     const { code } = req.body;
-
+    
     if (!code || typeof code !== 'string') {
       res.status(400).json({ error: 'Debe enviar un código de canje válido' });
       return;
     }
-
+    
     const orden = await canjearOrdenCandyPorCodigo(code.trim().toUpperCase());
     res.json(orden);
     return;
   } catch (error: any) {
     console.error('Error canjeando orden de Candy:', error);
     res.status(400).json({ error: error.message ?? 'Error canjeando orden' });
+    return;
+  }
+});
+
+// GET /api/candy-orders/:id
+// Ver detalle de una orden
+router.get('/:id', async (req, res): Promise<void> => {
+  try {
+    const orden = await obtenerOrdenCandyPorId(req.params.id);
+    if (!orden) {
+      res.status(404).json({ error: 'Orden no encontrada' });
+      return;
+    }
+    res.json(orden);
+    return;
+  } catch (error: any) {
+    console.error('Error obteniendo orden de Candy:', error);
+    res.status(500).json({ error: 'Error obteniendo orden' });
     return;
   }
 });

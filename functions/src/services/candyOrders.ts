@@ -24,16 +24,20 @@ export const crearOrdenCandy = async (data: {
 }): Promise<CandyOrder> => {
   const { userId, items, descuento, feeServicio, paymentMethod, paymentId } = data;
 
-  if (!userId || !items || items.length === 0) {
+  // Validación básica de entrada
+  if (!userId || !items || !Array.isArray(items) || items.length === 0) {
     throw new Error('Faltan datos obligatorios');
   }
 
   let subtotalCalculado = 0;
-
-  // --- VALIDACIÓN REALISTA ---
   const batch = db.batch();
 
   for (const item of items) {
+    // Validar datos mínimos del item
+    if (!item.productId || !item.tamanio || !item.cantidad || item.cantidad <= 0) {
+      throw new Error('Item inválido en la orden de Candy');
+    }
+
     const productRef = db.collection('candyProducts').doc(item.productId);
     const productSnap = await productRef.get();
 
@@ -47,29 +51,31 @@ export const crearOrdenCandy = async (data: {
       throw new Error(`El producto ${producto.nombre} no está disponible`);
     }
 
-    // Validar tamaño:
-    if (!producto.precios[item.tamanio]) {
+    // Validar que el tamaño exista
+    const precioCorrecto = producto.precios[item.tamanio];
+
+    if (typeof precioCorrecto !== 'number') {
       throw new Error(
         `El tamaño "${item.tamanio}" no existe para el producto ${producto.nombre}`
       );
     }
 
-    // Validar precio:
-    const precioCorrecto = producto.precios[item.tamanio];
-    if (precioCorrecto !== item.precioUnitario) {
+    // Validar precio (tolerancia pequeña por posibles decimales)
+    const diff = Math.abs(precioCorrecto - item.precioUnitario);
+    if (diff > 0.001) {
       throw new Error(
         `Precio inválido para ${producto.nombre}. Precio real: ${precioCorrecto}`
       );
     }
 
-    // Validar stock:
+    // Validar stock
     if (producto.stock < item.cantidad) {
       throw new Error(
         `No hay stock suficiente de ${producto.nombre}. Disponible: ${producto.stock}`
       );
     }
 
-    // Descontar stock:
+    // Descontar stock en batch
     batch.update(productRef, {
       stock: producto.stock - item.cantidad,
       actualizadoEn: new Date(),
@@ -80,7 +86,6 @@ export const crearOrdenCandy = async (data: {
 
   const totalCalculado = subtotalCalculado - descuento + feeServicio;
 
-  // Crear orden:
   const now = new Date();
   const redeemCode = generarCodigoCanje(8);
 
@@ -123,7 +128,6 @@ export const obtenerOrdenesCandyPorUsuario = async (
   const snapshot = await db
     .collection(COLLECTION)
     .where('userId', '==', userId)
-    .orderBy('createdAt', 'desc')
     .get();
 
   return snapshot.docs.map((doc) => ({
@@ -192,13 +196,16 @@ export const canjearOrdenCandyPorCodigo = async (
 
 // ================== INTEGRACIÓN CON MERCADO PAGO ==================
 
-// Tipo de item tal como lo guardamos en metadata de MP
 interface CandyOrderMpItem {
-  productId: string;
-  tamanio: string;
-  cantidad: number;
-  precioUnitario: number;
-  nombre: string;
+  productId?: string;
+  product_id?: string;  
+  tamanio?: string;
+  cantidad?: number;
+  quantity?: number;
+  precioUnitario?: number;
+  precio_unitario?: number;
+  nombre?: string;
+  title?: string;
 }
 
 /**
@@ -220,24 +227,84 @@ export const crearOrdenCandyDesdePagoMp = async (data: {
     feeServicio = 0,
   } = data;
 
-  // Adaptar items del metadata de MP al tipo CandyOrderItem
-  const itemsAdaptados: CandyOrderItem[] = items.map((item) => ({
-    productId: item.productId,
-    nombre: item.nombre ?? '',
-    tamanio: item.tamanio,
-    precioUnitario: item.precioUnitario,
-    cantidad: item.cantidad,
-    subtotal: item.cantidad * item.precioUnitario,
-  }));
+  const ordenExistente = await obtenerOrdenCandyPorPaymentId(paymentId);
+  if (ordenExistente) {
+    console.log(
+      `Orden ya existente para paymentId=${paymentId}. Evitando duplicado.`
+    );
+    return ordenExistente;
+  }
 
-  // Reusar toda la lógica de validación, stock y creación de orden
+  const itemsAdaptados: CandyOrderItem[] = [];
+
+  for (const raw of items) {
+    // Normalización robusta
+    const productId =
+      raw.productId ??
+      raw.product_id;
+
+    const tamanio = raw.tamanio;
+
+    const cantidad =
+      raw.cantidad ??
+      raw.quantity;
+
+    // Validación mínima antes de consultar Firestore
+    if (!productId || !tamanio || !cantidad || cantidad <= 0) {
+      console.warn('Item inválido en metadata MP (se ignora):', raw);
+      continue;
+    }
+
+    // Obtener el producto real desde Firestore
+    const productSnap = await db
+      .collection('candyProducts')
+      .doc(productId)
+      .get();
+
+    if (!productSnap.exists) {
+      console.warn(`Producto ${productId} no existe en Firestore (se ignora item)`);
+      continue;
+    }
+
+    const producto = productSnap.data() as CandyProduct;
+
+    if (!producto.activo) {
+      console.warn(`Producto ${producto.nombre} no está activo (se ignora item)`);
+      continue;
+    }
+
+    const precioUnitario = producto.precios[tamanio];
+
+    if (typeof precioUnitario !== 'number') {
+      console.warn(
+        `Producto ${producto.nombre} no tiene precio para tamaño "${tamanio}" (se ignora item)`
+      );
+      continue;
+    }
+
+    // Construir item adaptado
+    itemsAdaptados.push({
+      productId,
+      nombre: producto.nombre, // SIEMPRE usamos el real
+      tamanio,
+      precioUnitario,
+      cantidad,
+      subtotal: cantidad * precioUnitario,
+    });
+  }
+
+  if (!itemsAdaptados.length) {
+    throw new Error('No hay ítems válidos en metadata de MP');
+  }
+
+  // Crear orden reutilizando toda tu lógica original
   return crearOrdenCandy({
     userId,
     items: itemsAdaptados,
     descuento,
     feeServicio,
     paymentMethod: 'mercadopago',
-    paymentId,
+    paymentId: String(paymentId),
   });
 };
 
