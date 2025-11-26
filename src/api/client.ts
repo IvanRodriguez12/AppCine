@@ -10,6 +10,15 @@ interface BackendErrorResponse {
   details?: any;
 }
 
+// Tipo para las respuestas exitosas del backend
+interface BackendSuccessResponse<T = any> {
+  message?: string;
+  data?: T;
+  generatedAt?: string;
+  count?: number;
+  [key: string]: any;
+}
+
 // Crear instancia de Axios
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -84,11 +93,32 @@ apiClient.interceptors.response.use(
 );
 
 // Función helper para manejar respuestas
-export const handleApiResponse = <T = any>(response: AxiosResponse<T>): ApiResponse<T> => {
+export const handleApiResponse = <T = any>(
+  response: AxiosResponse<BackendSuccessResponse<T>>
+): ApiResponse<T> => {
+  const responseData = response.data;
+  
+  // 🔍 DIAGNÓSTICO: Log para ver la estructura
+  console.log('📦 handleApiResponse - responseData:', JSON.stringify(responseData, null, 2));
+  
+  // Si la respuesta tiene una propiedad 'data', la extraemos
+  // Esto maneja el caso donde el backend retorna: { message, data, generatedAt }
+  if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+    console.log('✅ Extrayendo propiedad "data" de la respuesta');
+    return {
+      success: true,
+      data: responseData.data as T,
+      message: responseData.message,
+    };
+  }
+  
+  // Si no tiene propiedad 'data', retornamos la respuesta completa
+  // Esto maneja endpoints que retornan directamente los datos
+  console.log('ℹ️ Retornando responseData completo (sin propiedad "data")');
   return {
     success: true,
-    data: response.data,
-    message: (response.data as any)?.message,
+    data: responseData as unknown as T,
+    message: responseData?.message,
   };
 };
 
