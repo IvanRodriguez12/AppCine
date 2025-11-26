@@ -414,7 +414,7 @@ router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
 
 /**
  * POST /users/forgot-password
- * Envía email para recuperar contraseña
+ * Envía código de 4 dígitos para recuperar contraseña
  */
 router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
   const { email } = req.body;
@@ -432,9 +432,9 @@ router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
   try {
     userRecord = await auth.getUserByEmail(email);
   } catch (error: any) {
-    // Respuesta genérica por seguridad
+    // Respuesta genérica por seguridad (no revelar si el email existe)
     return res.json({
-      message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
+      message: 'Si el email existe, recibirás un código para restablecer tu contraseña',
       sentTo: email
     });
   }
@@ -444,30 +444,106 @@ router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
   const userData = userDoc.data() as User;
   const displayName = userData?.displayName || 'Usuario';
 
-  const resetLink = await auth.generatePasswordResetLink(email);
-
-  // 🚀 ENVIAR EMAIL DE RESETEO
-  await emailService.sendPasswordResetEmail({
+  // 🆕 Generar código de 4 dígitos
+  const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
+  
+  // 🆕 Guardar código en Firestore con expiración de 15 minutos
+  await db.collection('passwordResets').doc(userRecord.uid).set({
     email,
-    displayName,
-    resetLink
+    code: resetCode,
+    userId: userRecord.uid,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutos
+    used: false
   });
 
+  // 🆕 Enviar email con código de 4 dígitos
+  await emailService.sendPasswordResetCode({
+    email,
+    displayName,
+    code: resetCode
+  });
+
+  console.log('✅ Código de reseteo generado para:', email);
+
   res.json({
-    message: 'Si el email existe, recibirás un link para restablecer tu contraseña',
-    sentTo: email,
+    message: 'Si el email existe, recibirás un código para restablecer tu contraseña',
+    sentTo: email
+  });
+}));
+
+/**
+ * POST /users/verify-reset-code
+ * Verifica el código de 4 dígitos
+ */
+router.post('/verify-reset-code', asyncHandler(async (req: any, res: any) => {
+  const { email, code } = req.body;
+
+  if (!email || !code) {
+    throw new ApiError(400, 'Email y código son requeridos');
+  }
+
+  // Buscar el usuario por email
+  let userRecord;
+  try {
+    userRecord = await auth.getUserByEmail(email);
+  } catch (error) {
+    throw new ApiError(400, 'Código inválido o expirado');
+  }
+
+  // Buscar el código en Firestore
+  const resetDoc = await db.collection('passwordResets').doc(userRecord.uid).get();
+
+  if (!resetDoc.exists) {
+    throw new ApiError(400, 'Código inválido o expirado');
+  }
+
+  const resetData = resetDoc.data();
+  
+  // ✅ Verificar que resetData existe
+  if (!resetData) {
+    throw new ApiError(400, 'Código inválido o expirado');
+  }
+  
+  // Verificar que el código coincida
+  if (resetData.code !== code) {
+    throw new ApiError(400, 'Código inválido');
+  }
+
+  // Verificar que el email coincida
+  if (resetData.email !== email) {
+    throw new ApiError(400, 'Código inválido');
+  }
+
+  // Verificar que no haya sido usado
+  if (resetData.used) {
+    throw new ApiError(400, 'Este código ya fue utilizado');
+  }
+
+  // Verificar si expiró
+  const expiresAt = new Date(resetData.expiresAt);
+  if (expiresAt < new Date()) {
+    throw new ApiError(400, 'Código expirado. Solicita uno nuevo');
+  }
+
+  console.log('✅ Código verificado correctamente para:', email);
+
+  res.json({
+    valid: true,
+    message: 'Código verificado correctamente',
+    userId: userRecord.uid
   });
 }));
 
 /**
  * POST /users/reset-password
- * Resetea la contraseña con el código de verificación
+ * Resetea la contraseña con el código verificado
  */
 router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
-  const { oobCode, newPassword } = req.body;
+  const { email, code, newPassword } = req.body;
 
-  if (!oobCode || !newPassword) {
-    throw new ApiError(400, 'Código de verificación y nueva contraseña son requeridos');
+  if (!email || !code || !newPassword) {
+    throw new ApiError(400, 'Email, código y nueva contraseña son requeridos');
   }
 
   const passwordValidation = validatePassword(newPassword);
@@ -475,92 +551,67 @@ router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, passwordValidation.errors.join('. '));
   }
 
+  // Buscar el usuario por email
+  let userRecord;
   try {
-    const [email] = oobCode.split(':');
-    
-    if (!email) {
-      throw new ApiError(400, 'Código de verificación inválido');
-    }
-
-    const userRecord = await auth.getUserByEmail(email);
-
-    await auth.updateUser(userRecord.uid, {
-      password: newPassword
-    });
-
-    await db.collection('users').doc(userRecord.uid).update({
-      passwordChangedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-
-    console.log('✅ Contraseña actualizada para:', email);
-
-    res.json({
-      message: 'Contraseña actualizada exitosamente',
-      success: true
-    });
-
-  } catch (error: any) {
-    console.error('Error reseteando contraseña:', error);
-    
-    if (error.code === 'auth/user-not-found') {
-      throw new ApiError(404, 'Usuario no encontrado');
-    }
-    
-    if (error.code === 'auth/invalid-action-code') {
-      throw new ApiError(400, 'Código de verificación inválido o expirado');
-    }
-
-    throw new ApiError(500, 'Error al restablecer contraseña');
-  }
-}));
-
-/**
- * POST /users/change-password
- * Cambia la contraseña (usuario autenticado)
- */
-router.post('/change-password', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
-  const userId = req.user?.uid;
-  const { currentPassword, newPassword } = req.body;
-
-  if (!userId) {
-    throw new ApiError(401, 'Usuario no autenticado');
-  }
-
-  if (!currentPassword || !newPassword) {
-    throw new ApiError(400, 'Contraseña actual y nueva contraseña son requeridas');
-  }
-
-  const passwordValidation = validatePassword(newPassword);
-  if (!passwordValidation.valid) {
-    throw new ApiError(400, passwordValidation.errors.join('. '));
-  }
-
-  const userDoc = await db.collection('users').doc(userId).get();
-  
-  if (!userDoc.exists) {
-    throw new ApiError(404, 'Usuario no encontrado');
-  }
-
-  const userData = userDoc.data() as User;
-  const email = userData?.email;
-
-  try {
-    await auth.getUserByEmail(email);
+    userRecord = await auth.getUserByEmail(email);
   } catch (error) {
-    throw new ApiError(401, 'Contraseña actual incorrecta');
+    throw new ApiError(400, 'Código inválido o expirado');
   }
 
-  await auth.updateUser(userId, {
+  // Buscar el código en Firestore
+  const resetDoc = await db.collection('passwordResets').doc(userRecord.uid).get();
+
+  if (!resetDoc.exists) {
+    throw new ApiError(400, 'Código inválido o expirado');
+  }
+
+  const resetData = resetDoc.data();
+  
+  // ✅ Verificar que resetData existe
+  if (!resetData) {
+    throw new ApiError(400, 'Código inválido o expirado');
+  }
+  
+  // Verificar que el código coincida
+  if (resetData.code !== code) {
+    throw new ApiError(400, 'Código inválido');
+  }
+
+  // Verificar que el email coincida
+  if (resetData.email !== email) {
+    throw new ApiError(400, 'Código inválido');
+  }
+
+  // Verificar que no haya sido usado
+  if (resetData.used) {
+    throw new ApiError(400, 'Este código ya fue utilizado');
+  }
+
+  // Verificar si expiró
+  const expiresAt = new Date(resetData.expiresAt);
+  if (expiresAt < new Date()) {
+    throw new ApiError(400, 'Código expirado. Solicita uno nuevo');
+  }
+
+  // ✅ Actualizar la contraseña en Firebase Auth
+  await auth.updateUser(userRecord.uid, {
     password: newPassword
   });
 
-  await db.collection('users').doc(userId).update({
+  // ✅ Marcar el código como usado
+  await db.collection('passwordResets').doc(userRecord.uid).update({
+    used: true,
+    usedAt: new Date().toISOString()
+  });
+
+  // ✅ Actualizar registro en Firestore
+  await db.collection('users').doc(userRecord.uid).update({
     passwordChangedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
 
-  console.log('✅ Contraseña cambiada para:', email);
+  console.log('✅ Contraseña actualizada para:', email);
 
   res.json({
     message: 'Contraseña actualizada exitosamente',

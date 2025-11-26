@@ -18,6 +18,12 @@ interface PasswordResetParams {
   resetLink: string;
 }
 
+interface PasswordResetCodeParams {
+  email: string;
+  displayName: string;
+  code: string;
+}
+
 class EmailService {
   private transporter;
   private appName = 'CineApp';
@@ -524,6 +530,152 @@ class EmailService {
     } catch (error: any) {
       console.error('❌ Error enviando email de bienvenida:', error);
       // No lanzar error, es solo informativo
+    }
+  }
+
+    /**
+   * Envía email con código de 4 dígitos para reseteo de contraseña
+   */
+  async sendPasswordResetCode(params: PasswordResetCodeParams): Promise<void> {
+    const { email, displayName, code } = params;
+
+    const mailOptions = {
+      from: `"${this.appName}" <${this.getFromEmail()}>`,
+      to: email,
+      subject: `Tu código de verificación - ${this.appName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              background-color: #f4f4f4;
+              margin: 0;
+              padding: 0;
+            }
+            .container {
+              max-width: 600px;
+              margin: 20px auto;
+              background: white;
+              border-radius: 10px;
+              overflow: hidden;
+              box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            .header {
+              background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+              color: white;
+              padding: 40px 20px;
+              text-align: center;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 32px;
+            }
+            .content {
+              padding: 40px 30px;
+              text-align: center;
+            }
+            .code-box {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              font-size: 48px;
+              font-weight: bold;
+              letter-spacing: 15px;
+              padding: 30px;
+              margin: 30px 0;
+              border-radius: 10px;
+              text-align: center;
+              font-family: 'Courier New', monospace;
+            }
+            .warning {
+              background: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 15px;
+              margin: 20px 0;
+              border-radius: 5px;
+              text-align: left;
+            }
+            .info {
+              background: #d1ecf1;
+              border-left: 4px solid #17a2b8;
+              padding: 15px;
+              margin: 20px 0;
+              border-radius: 5px;
+              text-align: left;
+            }
+            .footer {
+              text-align: center;
+              padding: 20px;
+              background: #f9f9f9;
+              font-size: 12px;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔑 ${this.appName}</h1>
+            </div>
+            
+            <div class="content">
+              <h2>Hola ${displayName},</h2>
+              
+              <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+              
+              <p><strong>Tu código de verificación es:</strong></p>
+              
+              <div class="code-box">
+                ${code}
+              </div>
+              
+              <p>Ingresa este código en la aplicación para continuar.</p>
+              
+              <div class="warning">
+                <strong>⚠️ Importante:</strong> Este código expira en 15 minutos por seguridad.
+              </div>
+              
+              <div class="info">
+                <strong>ℹ️ ¿No solicitaste esto?</strong><br>
+                Si no solicitaste restablecer tu contraseña, ignora este email. Tu contraseña permanecerá sin cambios y tu cuenta estará segura.
+              </div>
+            </div>
+            
+            <div class="footer">
+              <p>© 2024 ${this.appName}. Todos los derechos reservados.</p>
+              <p>Este es un correo automático, por favor no responder.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+        Hola ${displayName},
+        
+        Tu código de verificación para restablecer tu contraseña es:
+        
+        ${code}
+        
+        Este código expira en 15 minutos.
+        
+        Si no solicitaste esto, ignora este email.
+        
+        ${this.appName}
+      `
+    };
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Código de reseteo enviado:', info.messageId);
+      console.log('📧 Destinatario:', email);
+      console.log('🔢 Código:', code);
+    } catch (error: any) {
+      console.error('❌ Error enviando código de reseteo:', error);
+      throw new ApiError(500, 'Error al enviar código de reseteo');
     }
   }
 }

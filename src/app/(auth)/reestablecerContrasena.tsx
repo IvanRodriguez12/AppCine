@@ -15,10 +15,10 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
-import authService from '@/services/authService';
+import apiClient from '@/api/client';
 
 const ReestablecerContrasena = () => {
-  const { oobCode } = useLocalSearchParams<{ oobCode: string }>();
+  const { email, code } = useLocalSearchParams<{ email: string; code: string }>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -69,7 +69,7 @@ const ReestablecerContrasena = () => {
       return;
     }
 
-    if (!oobCode) {
+    if (!email || !code) {
       Alert.alert('Error', 'Faltan datos de verificación');
       return;
     }
@@ -77,14 +77,15 @@ const ReestablecerContrasena = () => {
     setIsLoading(true);
 
     try {
-      // ✅ Llamar al backend para cambiar la contraseña
-      const result = await authService.resetPassword({
-        oobCode,
+      // ✅ Llamar al backend para cambiar la contraseña con el código
+      const response = await apiClient.post('/users/reset-password', {
+        email,
+        code,
         newPassword: password
       });
 
-      if (!result.success) {
-        Alert.alert('Error', result.error || 'No se pudo actualizar la contraseña');
+      if (!response.data?.success) {
+        Alert.alert('Error', 'No se pudo actualizar la contraseña');
         return;
       }
 
@@ -101,9 +102,10 @@ const ReestablecerContrasena = () => {
           }
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al actualizar contraseña:', error);
-      Alert.alert('Error', 'Ocurrió un error. Inténtalo de nuevo');
+      const errorMsg = error.response?.data?.error || 'Ocurrió un error. Inténtalo de nuevo';
+      Alert.alert('Error', errorMsg);
     } finally {
       setIsLoading(false);
     }

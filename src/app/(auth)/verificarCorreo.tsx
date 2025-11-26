@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 import authService from '@/services/authService';
+import apiClient from '@/api/client';
 
 const VerificarCorreo = () => {
   const { email } = useLocalSearchParams<{ email: string }>();
@@ -61,7 +62,6 @@ const VerificarCorreo = () => {
       return;
     }
 
-    // Verificar que sean todos números
     if (!/^\d{4}$/.test(codeString)) {
       Alert.alert('Error', 'El código debe contener solo números');
       return;
@@ -70,10 +70,18 @@ const VerificarCorreo = () => {
     setIsLoading(true);
 
     try {
-      // ✅ Aquí simplemente validamos y navegamos
-      // La verificación real se hará en reestablecerContrasena.tsx con resetPassword()
-      
-      // Por ahora solo navegamos con el código y email
+      // ✅ Verificar el código con el backend
+      const response = await apiClient.post('/users/verify-reset-code', {
+        email,
+        code: codeString
+      });
+
+      if (!response.data?.valid) {
+        Alert.alert('Error', 'Código inválido o expirado');
+        return;
+      }
+
+      // Navegar a reestablecer contraseña con el código verificado
       Alert.alert(
         'Código verificado',
         'Tu código es válido. Ahora crea una nueva contraseña',
@@ -84,16 +92,18 @@ const VerificarCorreo = () => {
               router.push({
                 pathname: '/(auth)/reestablecerContrasena',
                 params: { 
-                  oobCode: codeString 
+                  email,
+                  code: codeString
                 }
               });
             }
           }
         ]
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al verificar código:', error);
-      Alert.alert('Error', 'Ocurrió un error. Inténtalo de nuevo');
+      const errorMsg = error.response?.data?.error || 'Código inválido o expirado';
+      Alert.alert('Error', errorMsg);
     } finally {
       setIsLoading(false);
     }
