@@ -1,9 +1,8 @@
+import { useAuth } from '@/context/authContext'; // ✅ IMPORTAR useAuth
 import {
   AntDesign,
   Entypo,
-  Feather,
-  Ionicons,
-  MaterialIcons
+  Ionicons
 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -22,7 +21,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { moderateScale, scale, verticalScale } from 'react-native-size-matters';
 import ConfirmLogout from './ConfirmLogout';
 import SessionClosed from './SessionClosed';
-import { useAuth } from '@/context/authContext'; // ✅ IMPORTAR useAuth
 
 const { width, height } = Dimensions.get('window');
 
@@ -244,6 +242,22 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
             <Text style={styles.menuItemText}>Mis Compras</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => {
+              onClose();
+              router.push('/menu/MisEntradas');
+            }}
+          >
+            <Entypo
+              name="ticket"
+              size={scale(20)}
+              color="white"
+              style={{ marginRight: scale(15) }}
+            />
+            <Text style={styles.menuItemText}>Mis Entradas</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/Ubicacion')}>
             <Entypo name="location-pin" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
             <Text style={styles.menuItemText}>Ubicación</Text>
@@ -252,11 +266,6 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisReviews')}>
             <AntDesign name="checkcircleo" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
             <Text style={styles.menuItemText}>Mis Reviews</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/menu/MisFavoritos')}>
-            <AntDesign name="heart" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-            <Text style={styles.menuItemText}>Mis Favoritos</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.menuItem} onPress={handleRatingPress}>
@@ -283,16 +292,6 @@ const MenuLateral = ({ onClose }: { onClose: () => void }) => {
               <Text style={styles.menuItemText}>Mi Cuenta</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                onClose();
-                router.push('/menu/ConfiguracionApp');
-              }}
-            >
-              <Feather name="settings" size={scale(20)} color="white" style={{ marginRight: scale(15) }} />
-              <Text style={styles.menuItemText}>Configuración</Text>
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogoutPress}>

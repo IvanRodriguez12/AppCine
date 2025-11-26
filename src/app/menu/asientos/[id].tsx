@@ -1,6 +1,7 @@
+import apiClient from '@/api/client';
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -14,12 +15,10 @@ const filas = 6;
 const columnas = 8;
 const precioPorAsiento = 5;
 
-const asientosOcupados = ['A3', 'B5', 'C2', 'D8', 'E4'];
-
 const generarAsientos = () => {
-  const asientos = [];
+  const asientos: string[][] = [];
   for (let f = 0; f < filas; f++) {
-    const fila = [];
+    const fila: string[] = [];
     for (let c = 0; c < columnas; c++) {
       const letra = String.fromCharCode(65 + f);
       fila.push(`${letra}${c + 1}`);
@@ -30,11 +29,34 @@ const generarAsientos = () => {
 };
 
 const Asientos = () => {
-  const { id, fecha, hora } = useLocalSearchParams();
+  const { id, fecha, hora, showtimeId } = useLocalSearchParams();
   const router = useRouter();
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
+  const [asientosOcupados, setAsientosOcupados] = useState<string[]>([]);
 
   const asientos = generarAsientos();
+
+  // Cargar asientos ocupados desde el backend usando showtimeId
+  useEffect(() => {
+    const fetchShowtimeSeats = async () => {
+      const sId = Array.isArray(showtimeId) ? showtimeId[0] : showtimeId;
+      if (!sId) return;
+
+      try {
+        const response = await apiClient.get(`/showtimes/${sId}`);
+        const data = response.data as any;
+        const occupied =
+          (data && (data.occupiedSeats || data.asientosOcupados)) || [];
+        if (Array.isArray(occupied)) {
+          setAsientosOcupados(occupied);
+        }
+      } catch (error) {
+        console.error('Error al cargar asientos ocupados:', error);
+      }
+    };
+
+    fetchShowtimeSeats();
+  }, [showtimeId]);
 
   const toggleSeleccion = (asiento: string) => {
     if (asientosOcupados.includes(asiento)) return;
@@ -61,6 +83,7 @@ const Asientos = () => {
         id,
         fecha,
         hora,
+        showtimeId,
         asientos: asientosString,
         total: total.toString()
       }
@@ -126,7 +149,9 @@ const Asientos = () => {
       <View style={styles.summary}>
         <View style={styles.rowInfo}>
           <Ionicons name="calendar-outline" size={18} color="white" />
-          <Text style={styles.infoText}>{fecha || "Fecha"}  •  {hora || "Hora"}</Text>
+          <Text style={styles.infoText}>
+            {fecha || "Fecha"}  •  {hora || "Hora"}
+          </Text>
         </View>
         <View style={styles.rowInfo}>
           <MaterialCommunityIcons name="seat-outline" size={18} color="white" />

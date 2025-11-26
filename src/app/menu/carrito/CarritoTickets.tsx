@@ -1,3 +1,4 @@
+import apiClient from '@/api/client';
 import Header from '@/components/Header';
 import cuponesData from '@/data/cupones.json';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,7 +66,7 @@ type Pelicula = {
 };
 
 const CarritoTickets: React.FC = () => {
-  const { id, fecha, hora, asientos, total } = useLocalSearchParams();
+  const { id, fecha, hora, asientos, total, showtimeId } = useLocalSearchParams();
   const router = useRouter();
   
   const [selectedPayment, setSelectedPayment] = useState<string>('');
@@ -242,7 +243,8 @@ const CarritoTickets: React.FC = () => {
     });
   };
 
-  const guardarCompra = async () => {
+  const movieIdStr = Array.isArray(id) ? id[0] : id;
+  const guardarCompra = async (ticketId?: string, qrCode?: string) => {
     try {
       const subtotal = parseFloat(total as string);
       const totalFinal = subtotal - descuentoAplicado + 2;
@@ -259,12 +261,17 @@ const CarritoTickets: React.FC = () => {
         cuponUsado: cuponAplicado?.codigo || null,
         precio: totalFinal,
         metodo: selectedPayment === 'visa' ? 'Tarjeta' : 'Billetera',
+        ticketId: ticketId || null,
+        qrCode: qrCode || null,
+        movieId: movieIdStr,
       };
+
       const comprasPrevias = await AsyncStorage.getItem(COMPRAS_KEY);
       const lista = comprasPrevias ? JSON.parse(comprasPrevias) : [];
       lista.push(nuevaCompra);
       await AsyncStorage.setItem(COMPRAS_KEY, JSON.stringify(lista));
-    } catch {
+    } catch (error) {
+      console.error('Error guardando compra local:', error);
     }
   };
 
@@ -355,16 +362,70 @@ const CarritoTickets: React.FC = () => {
       return;
     }
 
-    await guardarCompra();
+    // showtimeId que viene desde Asientos
+    const sId = Array.isArray(showtimeId) ? showtimeId[0] : showtimeId;
+    if (!sId) {
+      Alert.alert(
+        'Error',
+        'No se encontró la función seleccionada. Volvé a elegir tus asientos.'
+      );
+      return;
+    }
 
-    setShowSuccessModal(true);
-    
-    setTimeout(() => {
-      setShowSuccessModal(false);
+    // Asientos seleccionados que vienen como string "A1, A2, B3"
+    const asientosRaw = Array.isArray(asientos) ? asientos[0] : asientos;
+    const listaAsientos =
+      (asientosRaw || '')
+        .toString()
+        .split(',')
+        .map((a) => a.trim())
+        .filter((a) => a.length > 0);
+
+    if (listaAsientos.length === 0) {
+      Alert.alert(
+        'Error',
+        'No se encontraron los asientos seleccionados. Volvé a la pantalla anterior.'
+      );
+      return;
+    }
+
+    const subtotal = parseFloat(total as string);
+    const totalFinal = subtotal - descuentoAplicado + 2; // mismo cálculo que usarás como precio final
+
+    try {
+      // Llamar al backend para crear el ticket y reservar asientos
+      const response = await apiClient.post('/checkout-ticket', {
+        showtimeId: sId,
+        asientos: listaAsientos,
+        total: totalFinal,
+        metodoPago: selectedPayment === 'visa' ? 'tarjeta' : 'billetera',
+      });
+
+      const { ticketId, qrCode, ticketToken } = response.data || {};
+      console.log('Ticket generado:', ticketId, ticketToken);
+
+      // Guardar la compra en local incluyendo ticketId/qrCode
+      await guardarCompra(ticketId, qrCode);
+
+      // Mostrar modal de éxito y volver al menú
+      setShowSuccessModal(true);
+
       setTimeout(() => {
-        router.replace('menu/menuPrincipal');
-      }, 200);
-    }, 3000);
+        setShowSuccessModal(false);
+        setTimeout(() => {
+          router.replace('menu/menuPrincipal');
+        }, 200);
+      }, 3000);
+    } catch (error: any) {
+      console.error('Error al finalizar pago / generar ticket:', error);
+
+      const mensajeBackend =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        'No se pudo procesar el pago. Intente nuevamente.';
+
+      Alert.alert('Error', mensajeBackend);
+    }
   };
 
   const renderCuponSection = () => (
