@@ -10,109 +10,153 @@ import {
     Text,
     TouchableOpacity,
     View,
+    ScrollView
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const SobreNosotros: React.FC = () => {
     const router = useRouter();
     const [showTOS, setShowTOS] = useState(false);
-    const handleBackPress = (): void => {
+
+    const handleBackPress = () => {
         router.back();
     };
 
-    const openTOS = (): void => {
-        setShowTOS(true);
-    };
+    const openTOS = () => setShowTOS(true);
 
     const TOS = () => (
         <Modal
-          visible={showTOS}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowTOS(false)}
+            visible={showTOS}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowTOS(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Términos y Condiciones</Text>
-                <Text style={styles.modalSubtitle}>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat pito de amongos nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in te la comes voluptate velit esse cillum dolore eu fugiat nulla pariatur.</Text>
-              </View>
-    
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setShowTOS(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cerrar</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <ScrollView showsVerticalScrollIndicator={true}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Términos y Condiciones</Text>
+                            <Text style={styles.modalSubtitle}>
+                                Términos y Condiciones de Uso – CineApp{"\n"}
+                                Última actualización: 2025{"\n\n"}
+
+                                Bienvenido/a a CineApp. Al utilizar nuestra aplicación, usted acepta los siguientes términos:
+
+                                {"\n\n"}1. Descripción del servicio{"\n"}
+                                CineApp permite consultar funciones, comprar entradas (si está disponible) y acceder a promociones. Algunas funciones pueden variar según región o cine asociado.
+
+                                {"\n\n"}2. Registro y cuenta del usuario{"\n"}
+                                Es posible que necesite crear una cuenta. Usted es responsable de la veracidad de los datos, la contraseña y reportar usos no autorizados.
+
+                                {"\n\n"}3. Compras y pagos{"\n"}
+                                Los precios dependen del cine. Los pagos se procesan con plataformas seguras externas. CineApp no almacena datos bancarios.
+
+                                {"\n\n"}4. Uso permitido{"\n"}
+                                Solo para uso personal. Prohibido hackeo, bots, manipulación o fraude.
+
+                                {"\n\n"}5. Propiedad intelectual{"\n"}
+                                Todo el contenido es propiedad de CineApp o titulares asociados. Se prohíbe la copia no autorizada.
+
+                                {"\n\n"}6. Enlaces externos{"\n"}
+                                CineApp puede mostrar enlaces externos. No somos responsables por su contenido o políticas.
+
+                                {"\n\n"}7. Privacidad{"\n"}
+                                Los datos se manejan según nuestra Política de Privacidad. Nunca vendemos información personal.
+
+                                {"\n\n"}8. Limitación de responsabilidad{"\n"}
+                                No garantizamos disponibilidad constante ni ausencia de errores.
+
+                                {"\n\n"}9. Modificaciones{"\n"}
+                                Podemos actualizar estos términos en cualquier momento.
+
+                                {"\n\n"}10. Contacto{"\n"}
+                                Email: soportetecnico@cineapp.com
+
+                                {"\n\n"}11. Aceptación{"\n"}
+                                Al usar CineApp, usted confirma haber leído y aceptado estos términos.
+                            </Text>
+                        </View>
+                    </ScrollView>
+
+                    <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                            style={[styles.modalButton, styles.cancelButton]}
+                            onPress={() => setShowTOS(false)}
+                        >
+                            <Text style={styles.cancelButtonText}>Cerrar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </View>
-          </View>
-        </Modal>)
+        </Modal>
+    );
 
     return (
-   <><SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <Ionicons name="arrow-back" size={28} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.title}>CineApp</Text>
-        <Image
-          source={require('../../assets/images/adaptive-icon.png')}
-          style={styles.logo}
-        />
-      </View>
+        <>
+            <SafeAreaView style={styles.container}>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+                            <Ionicons name="arrow-back" size={28} color="white" />
+                        </TouchableOpacity>
+                        <Text style={styles.title}>CineApp</Text>
+                        <Image
+                            source={require('../../assets/images/adaptive-icon.png')}
+                            style={styles.logo}
+                        />
+                    </View>
 
-      {/* Título de sección */}
-        <View style={styles.sectionTitleContainer}>
-            <Text style={styles.sectionTitle}>SOBRE NOSOTROS</Text>
-        </View>
+                    <View style={styles.sectionTitleContainer}>
+                        <Text style={styles.sectionTitle}>SOBRE NOSOTROS</Text>
+                    </View>
 
-      {/* Descripción tecnica */}
-        <View style={styles.infoContainer}>
-            <Text style={[styles.infoText, { color: "#8C8C8C" }]}>La aplicación definitiva para los amantes del cine. Encuentra los mejores estrenos, compra entradas y disfruta de promociones exclusivas en tu ciudad. © 2025 APPCINE. Todos los derechos reservados.</Text>
-            <Text style={[styles.infoText, { color: "#8C8C8C" }]}>Version 2.3.1</Text>
-        </View>
+                    <View style={styles.infoContainer}>
+                        <Text style={[styles.infoText, { color: "#8C8C8C" }]}>
+                            La aplicación definitiva para los amantes del cine. Encuentra los mejores estrenos,
+                            compra entradas y disfruta de promociones exclusivas. © 2025 APPCINE.
+                        </Text>
+                        <Text style={[styles.infoText, { color: "#8C8C8C" }]}>
+                            Versión 2.3.1
+                        </Text>
+                    </View>
 
-      {/* Terminos y condiciones */}
-        <View style={styles.textoption}>
-            <Text style={[styles.sectionTitle]}>Términos y Condiciones</Text>
-            <TouchableOpacity style={styles.backButton} onPress={openTOS}>
-                <Ionicons name="arrow-forward" size={28} color="white" />
-            </TouchableOpacity>
-        </View>
+                    {/* Terminos */}
+                    <View style={styles.textoption}>
+                        <Text style={styles.sectionTitle}>Términos y Condiciones</Text>
+                        <TouchableOpacity onPress={openTOS}>
+                            <Ionicons name="arrow-forward" size={28} color="white" />
+                        </TouchableOpacity>
+                    </View>
 
-      {/* Redes sociales */}
+                    {/* Redes */}
+                    <View style={styles.infoContainer}>
+                        <Text style={styles.sectionTitle}>Síguenos en redes sociales</Text>
+                        <View style={styles.dropdownContent}>
+                            <TouchableOpacity onPress={() => openBrowserAsync("https://instagram.com")}>
+                                <Image style={styles.appicon} source={require('../../assets/images/instagram-logo.png')} />
+                            </TouchableOpacity>
 
-    <View style={styles.infoContainer}>
-        <Text style={[styles.sectionTitle]}>Siguenos en redes sociales</Text>
-        <View style={styles.dropdownContent}>
-            <TouchableOpacity style={styles.backButton} onPress={() => openBrowserAsync("https://instagram.com")}>
-                <Image style={styles.appicon} source = {require('../../assets/images/instagram-logo.png')} />
-            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => openBrowserAsync("https://twitter.com")}>
+                                <Image style={styles.appicon} source={require('../../assets/images/twitter-logo.png')} />
+                            </TouchableOpacity>
 
-            <TouchableOpacity style={styles.backButton} onPress={() => openBrowserAsync("https://twitter.com")}>
-                <Image style={styles.appicon} source = {require('../../assets/images/twitter-logo.png')} />
-            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => openBrowserAsync("https://facebook.com")}>
+                                <Image style={styles.appicon} source={require('../../assets/images/facebook-logo.png')} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
-            <TouchableOpacity style={styles.backButton} onPress={() => openBrowserAsync("https://facebook.com")}>
-                <Image style={styles.appicon} source = {require('../../assets/images/facebook-logo.png')} />
-            </TouchableOpacity>
-        </View>
-    </View>
+                    {/* Soporte */}
+                    <View style={styles.infoContainer}>
+                        <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Contactar a Soporte</Text>
+                        <Text style={styles.infoText}>EMAIL: cineappmovil@gmail.com</Text>
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
 
-      {/* Contactar soporte */}
-        <View style={[styles.infoContainer]}>
-            <Text style={[styles.sectionTitle, {marginBottom: verticalScale(12)}]}>Contactar a Soporte</Text>
-            <Text style={[styles.infoText]}>EMAIL: soportetecnico@cineapp.com</Text>
-        </View>
-
-      </SafeAreaView>
-
-      {/* Modales */}
-      <TOS />
-      </>
+            <TOS />
+        </>
     );
 };
 
@@ -286,58 +330,59 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: moderateScale(20)
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: moderateScale(20)
   },
-  keyboardContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%'
-  },
+
   modalContent: {
     backgroundColor: '#1a1a1a',
     borderRadius: moderateScale(20),
-    padding: moderateScale(25),
+    padding: moderateScale(20),
     width: '90%',
-    maxWidth: moderateScale(400),
-    alignItems: 'center'
+    maxHeight: '80%',       // << IMPORTANTE PARA PERMITIR SCROLL
   },
+
   modalHeader: {
     alignItems: 'center',
-    marginBottom: verticalScale(25)
+    marginBottom: verticalScale(10)
   },
+
   modalTitle: {
     fontSize: moderateScale(22),
     fontWeight: 'bold',
     color: 'white',
-    marginTop: verticalScale(10),
+    marginBottom: verticalScale(10),
     textAlign: 'center'
   },
+
   modalSubtitle: {
     fontSize: moderateScale(14),
     color: '#ccc',
-    marginTop: verticalScale(5),
-    textAlign: 'center'
+    marginBottom: verticalScale(10),
+    textAlign: 'left',
+    lineHeight: moderateScale(18)
   },
-    modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%'
+
+  modalButtons: {
+  flexDirection: 'row',
+  justifyContent: 'center',
+  marginTop: verticalScale(15)
   },
+
   modalButton: {
-    flex: 1,
     paddingVertical: verticalScale(12),
     paddingHorizontal: moderateScale(20),
     borderRadius: moderateScale(10),
-    marginHorizontal: moderateScale(5)
+    width: '60%'
   },
-  cancelButton: {
-    backgroundColor: '#444'
+
+  cancelButton: {       
+    backgroundColor: '#444',
   },
+
   cancelButtonText: {
     color: 'white',
     fontSize: moderateScale(16),

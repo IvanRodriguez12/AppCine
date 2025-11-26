@@ -43,10 +43,10 @@ const NovedadesAnuncios: React.FC = () => {
     {
       id: 1,
       title: 'Festival de Cannes 2025',
-      date: '13 SEP 2025',
+      date: '13 NOV 2025',
       category: 'NOTICIAS',
       subtitle: 'Las películas más esperadas del festival',
-      content: `El Festival de Cannes ha anunciado la selección oficial para su edición 2025, que se celebrará del 13 al 24 de Septiembre.
+      content: `El Festival de Cannes ha anunciado la selección oficial para su edición 2025, que se celebrará del 13 al 24 de Noviembre.
 
 Entre las películas más esperadas destacan el nuevo trabajo de Denis Villeneuve y el regreso de Sofia Coppola.
 
@@ -55,10 +55,10 @@ La ceremonia de apertura contará con estrellas internacionales y promete un eve
     {
       id: 2,
       title: '2x1 en palomitas',
-      date: '03 JUL 2025',
+      date: '03 NOV 2025',
       category: 'PROMOCIÓN',
       subtitle: 'Promoción especial para suscriptores',
-      content: `¡Oferta especial para nuestros suscriptores! Durante todo el mes de Julio podrás disfrutar de 2x1 en palomitas medianas y grandes.
+      content: `¡Oferta especial para nuestros suscriptores! Durante todo el mes de Noviembre podrás disfrutar de 2x1 en palomitas medianas y grandes.
 
 Esta promoción es válida únicamente para miembros del programa de suscripción CineApp Premium.
 
@@ -67,7 +67,7 @@ Realiza tu compra desde la CineApp con tu cuenta, o presenta tu cuenta de suscri
     {
       id: 3,
       title: 'Nolan prepara nuevo proyecto',
-      date: '01 JUL 2025',
+      date: '01 NOV 2025',
       category: 'NOTICIAS',
       subtitle: 'El director anuncia su nueva película',
       content: `Christopher Nolan ha confirmado oficialmente su próximo proyecto cinematográfico, que comenzará a filmarse este verano.
