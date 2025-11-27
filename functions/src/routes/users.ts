@@ -166,8 +166,8 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
   
   await db.collection('users').doc(userRecord.uid).set(userData);
 
-  // 🚀 ENVIAR EMAIL DE VERIFICACIÓN AUTOMÁTICAMENTE
-    try {
+  // Enviar email de verificación automáticamente
+  try {
     const verificationLink = await auth.generateEmailVerificationLink(email);
     
     await emailService.sendVerificationEmail({
@@ -182,7 +182,6 @@ router.post('/register', asyncHandler(async (req: any, res: any) => {
     // No lanzar error para no bloquear el registro
   }
 
-  // ✅ YA NO GENERAMOS customToken - solo devolvemos success
   res.status(201).json({
     success: true,
     message: 'Usuario creado exitosamente. Revisa tu email para verificar tu cuenta.',
@@ -231,7 +230,7 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
     lastLoginAt: new Date().toISOString()
   });
 
-    res.json({
+  res.json({
     message: 'Login exitoso',
     user: {
       uid: userRecord.uid,
@@ -277,10 +276,8 @@ router.post('/send-verification-email', verifyToken, asyncHandler(async (req: Au
   const email = userData?.email;
   const displayName = userData?.displayName;
   
-  // Generar link de verificación
   const verificationLink = await auth.generateEmailVerificationLink(email);
 
-  // 🚀 ENVIAR EMAIL
   await emailService.sendVerificationEmail({
     email,
     displayName,
@@ -309,10 +306,10 @@ router.post('/check-email-verification', verifyToken, asyncHandler(async (req: A
     throw new ApiError(401, 'Usuario no autenticado');
   }
 
-  // Obtener usuario de Firebase Auth
+  // Usuario en Firebase Auth
   const userRecord = await auth.getUser(userId);
   
-  // Obtener usuario de Firestore
+  // Usuario en Firestore
   const userDoc = await db.collection('users').doc(userId).get();
   
   if (!userDoc.exists) {
@@ -321,39 +318,57 @@ router.post('/check-email-verification', verifyToken, asyncHandler(async (req: A
 
   const userData = userDoc.data() as User;
 
-  // Si Firebase Auth dice que está verificado pero Firestore no, actualizar Firestore
+  // Flags actuales para ver si podría ser "verified"
+  const hasDni = !!userData?.dniUploaded && !!userData?.dniUrl;
+  const hasFace = !!userData?.faceVerified;
+
+  // Si Auth dice que está verificado pero Firestore no, sincronizamos
   if (userRecord.emailVerified && !userData?.isEmailVerified) {
     console.log('✅ Sincronizando verificación de email en Firestore');
-    
-    await db.collection('users').doc(userId).update({
+
+    const updateData: any = {
       isEmailVerified: true,
       emailVerifiedAt: new Date().toISOString(),
-      accountLevel: 'verified',
       updatedAt: new Date().toISOString()
-    });
+    };
 
-    res.json({
+    // Sólo subimos a "verified" si YA tiene email verificado + DNI + cara
+    if (hasDni && hasFace) {
+      updateData.accountLevel = 'verified';
+    }
+
+    await db.collection('users').doc(userId).update(updateData);
+
+    return res.json({
       message: 'Email verificado exitosamente',
       verified: true,
-      accountLevel: 'verified'
-    });
-  } else if (userData?.isEmailVerified) {
-    res.json({
-      message: 'El email ya está verificado',
-      verified: true,
-      accountLevel: userData?.accountLevel || 'verified'
-    });
-  } else {
-    res.json({
-      message: 'El email aún no ha sido verificado',
-      verified: false
+      accountLevel: updateData.accountLevel || userData.accountLevel || 'basic'
     });
   }
+
+  // Si ya estaba verificado en Firestore
+  if (userData?.isEmailVerified) {
+    const hasAllChecks = !!userData.isEmailVerified && hasDni && hasFace;
+
+    return res.json({
+      message: 'El email ya está verificado',
+      verified: true,
+      hasAllChecks,
+      accountLevel: userData.accountLevel || 'basic'
+    });
+  }
+
+  // Email aún no verificado
+  return res.json({
+    message: 'El email aún no ha sido verificado',
+    verified: false,
+    accountLevel: userData.accountLevel || 'basic'
+  });
 }));
 
 /**
  * POST /users/verify-email
- * Verifica el email del usuario
+ * Verifica el email del usuario (flujo con oobCode)
  */
 router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
   const { oobCode } = req.body;
@@ -371,28 +386,46 @@ router.post('/verify-email', asyncHandler(async (req: any, res: any) => {
 
     const userRecord = await auth.getUserByEmail(email);
 
+    // Marcamos verificado en Auth
     await auth.updateUser(userRecord.uid, {
       emailVerified: true
     });
 
-    await db.collection('users').doc(userRecord.uid).update({
+    // Obtenemos usuario en Firestore
+    const userRef = db.collection('users').doc(userRecord.uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      throw new ApiError(404, 'Usuario no encontrado');
+    }
+
+    const userData = userDoc.data() as User;
+
+    const hasDni = !!userData?.dniUploaded && !!userData?.dniUrl;
+    const hasFace = !!userData?.faceVerified;
+
+    const updateData: any = {
       isEmailVerified: true,
       emailVerifiedAt: new Date().toISOString(),
-      accountLevel: 'verified',
       updatedAt: new Date().toISOString()
-    });
+    };
 
-    // 🎉 ENVIAR EMAIL DE BIENVENIDA (OPCIONAL)
-    const userDoc = await db.collection('users').doc(userRecord.uid).get();
-    const userData = userDoc.data() as User;
-    
-    await emailService.sendWelcomeEmail(email, userData?.displayName || 'Usuario')
+    // Solo ponemos accountLevel = 'verified' si YA tiene mail + DNI + cara
+    if (hasDni && hasFace) {
+      updateData.accountLevel = 'verified';
+    }
+
+    await userRef.update(updateData);
+
+    // Email de bienvenida (opcional)
+    await emailService
+      .sendWelcomeEmail(email, userData?.displayName || 'Usuario')
       .catch(err => console.error('Error enviando bienvenida:', err));
 
     res.json({
       message: 'Email verificado exitosamente',
       verified: true,
-      accountLevel: 'verified'
+      accountLevel: updateData.accountLevel || userData.accountLevel || 'basic'
     });
 
   } catch (error: any) {
@@ -444,10 +477,10 @@ router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
   const userData = userDoc.data() as User;
   const displayName = userData?.displayName || 'Usuario';
 
-  // 🆕 Generar código de 4 dígitos
+  // Generar código de 4 dígitos
   const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
   
-  // 🆕 Guardar código en Firestore con expiración de 15 minutos
+  // Guardar código en Firestore con expiración de 15 minutos
   await db.collection('passwordResets').doc(userRecord.uid).set({
     email,
     code: resetCode,
@@ -457,7 +490,7 @@ router.post('/forgot-password', asyncHandler(async (req: any, res: any) => {
     used: false
   });
 
-  // 🆕 Enviar email con código de 4 dígitos
+  // Enviar email con código de 4 dígitos
   await emailService.sendPasswordResetCode({
     email,
     displayName,
@@ -483,7 +516,6 @@ router.post('/verify-reset-code', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Email y código son requeridos');
   }
 
-  // Buscar el usuario por email
   let userRecord;
   try {
     userRecord = await auth.getUserByEmail(email);
@@ -491,7 +523,6 @@ router.post('/verify-reset-code', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Código inválido o expirado');
   }
 
-  // Buscar el código en Firestore
   const resetDoc = await db.collection('passwordResets').doc(userRecord.uid).get();
 
   if (!resetDoc.exists) {
@@ -500,27 +531,22 @@ router.post('/verify-reset-code', asyncHandler(async (req: any, res: any) => {
 
   const resetData = resetDoc.data();
   
-  // ✅ Verificar que resetData existe
   if (!resetData) {
     throw new ApiError(400, 'Código inválido o expirado');
   }
   
-  // Verificar que el código coincida
   if (resetData.code !== code) {
     throw new ApiError(400, 'Código inválido');
   }
 
-  // Verificar que el email coincida
   if (resetData.email !== email) {
     throw new ApiError(400, 'Código inválido');
   }
 
-  // Verificar que no haya sido usado
   if (resetData.used) {
     throw new ApiError(400, 'Este código ya fue utilizado');
   }
 
-  // Verificar si expiró
   const expiresAt = new Date(resetData.expiresAt);
   if (expiresAt < new Date()) {
     throw new ApiError(400, 'Código expirado. Solicita uno nuevo');
@@ -551,7 +577,6 @@ router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, passwordValidation.errors.join('. '));
   }
 
-  // Buscar el usuario por email
   let userRecord;
   try {
     userRecord = await auth.getUserByEmail(email);
@@ -559,7 +584,6 @@ router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
     throw new ApiError(400, 'Código inválido o expirado');
   }
 
-  // Buscar el código en Firestore
   const resetDoc = await db.collection('passwordResets').doc(userRecord.uid).get();
 
   if (!resetDoc.exists) {
@@ -568,44 +592,36 @@ router.post('/reset-password', asyncHandler(async (req: any, res: any) => {
 
   const resetData = resetDoc.data();
   
-  // ✅ Verificar que resetData existe
   if (!resetData) {
     throw new ApiError(400, 'Código inválido o expirado');
   }
   
-  // Verificar que el código coincida
   if (resetData.code !== code) {
     throw new ApiError(400, 'Código inválido');
   }
 
-  // Verificar que el email coincida
   if (resetData.email !== email) {
     throw new ApiError(400, 'Código inválido');
   }
 
-  // Verificar que no haya sido usado
   if (resetData.used) {
     throw new ApiError(400, 'Este código ya fue utilizado');
   }
 
-  // Verificar si expiró
   const expiresAt = new Date(resetData.expiresAt);
   if (expiresAt < new Date()) {
     throw new ApiError(400, 'Código expirado. Solicita uno nuevo');
   }
 
-  // ✅ Actualizar la contraseña en Firebase Auth
   await auth.updateUser(userRecord.uid, {
     password: newPassword
   });
 
-  // ✅ Marcar el código como usado
   await db.collection('passwordResets').doc(userRecord.uid).update({
     used: true,
     usedAt: new Date().toISOString()
   });
 
-  // ✅ Actualizar registro en Firestore
   await db.collection('users').doc(userRecord.uid).update({
     passwordChangedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -647,7 +663,6 @@ router.get('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
       password: undefined
     });
   } else {
-    // Construir User completo con uid
     const fullUserData = {
       uid: userDoc.id,
       ...userData
@@ -709,7 +724,6 @@ router.put('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) 
 router.delete('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
 
-  // Solo el propio usuario puede eliminar su cuenta
   if (req.user?.uid !== id) {
     throw new ApiError(403, 'No autorizado para eliminar esta cuenta');
   }
@@ -717,11 +731,9 @@ router.delete('/:id', verifyToken, asyncHandler(async (req: AuthRequest, res: an
   console.log('🗑️ Eliminando cuenta:', id);
 
   try {
-    // 1. Eliminar documento de Firestore
     await db.collection('users').doc(id).delete();
     console.log('✅ Documento de Firestore eliminado');
 
-    // 2. Eliminar usuario de Firebase Auth
     await auth.deleteUser(id);
     console.log('✅ Usuario eliminado de Firebase Auth');
 

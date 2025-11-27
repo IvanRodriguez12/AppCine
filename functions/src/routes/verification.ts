@@ -141,12 +141,12 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
 
   try {
     // Leer DNI directamente desde Storage
-    console.log('⬇️  Leyendo DNI desde Storage...');
+    console.log('  Leyendo DNI desde Storage...');
     
     const dniFile = bucket.file(userData.dniFileName!);
     const [dniBuffer] = await dniFile.download();
     
-    console.log('✅ DNI leído:', dniBuffer.length, 'bytes');
+    console.log(' DNI leído:', dniBuffer.length, 'bytes');
 
     // Validar DNI
     const dniValidation = validateImageForRekognition(dniBuffer);
@@ -180,11 +180,24 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
       updatedAt: new Date().toISOString()
     };
 
-    if (verificationResult.verified && meetsMinimumThreshold(verificationResult.similarity)) {
+    const faceVerifiedNow =
+      verificationResult.verified && meetsMinimumThreshold(verificationResult.similarity);
+
+    if (faceVerifiedNow) {
       updateData.faceVerified = true;
       updateData.faceVerifiedAt = new Date().toISOString();
-      updateData.accountLevel = 'premium';
       updateData.lastVerificationError = null;
+
+      // Solo subir a "verified" si tiene:
+      // - email verificado
+      // - DNI subido
+      // - rostro verificado (lo que acabamos de hacer)
+      const hasEmailVerified = !!userData?.isEmailVerified;
+      const hasDni = !!userData?.dniUploaded && !!userData?.dniUrl;
+
+      if (hasEmailVerified && hasDni) {
+        updateData.accountLevel = 'verified';
+      }
     } else {
       updateData.lastVerificationError = verificationResult.message;
     }
@@ -192,7 +205,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     await db.collection('users').doc(userId).update(updateData);
 
     // Respuesta al cliente
-    if (verificationResult.verified) {
+    if (faceVerifiedNow) {
       const successResponse: FaceVerificationSuccessResponse = {
         message: verificationResult.message,
         verified: true,
@@ -215,7 +228,7 @@ router.post('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: any
     }
 
   } catch (error: any) {
-    console.error('❌ Error en verificación facial:', error);
+    console.error(' Error en verificación facial:', error);
 
     // Registrar intento fallido
     await db.collection('users').doc(userId).update({
@@ -318,8 +331,9 @@ router.delete('/face', verifyToken, asyncHandler(async (req: AuthRequest, res: a
     }
   }
 
-  // Determinar nuevo accountLevel
-  const newAccountLevel = userData?.isEmailVerified ? 'verified' : 'basic';
+  // Si se elimina la cara, ya NO cumple las 3 condiciones,
+  // así que el accountLevel no puede seguir siendo "verified".
+  const newAccountLevel = 'basic';
 
   // Limpiar datos de verificación facial
   await db.collection('users').doc(userId).update({
