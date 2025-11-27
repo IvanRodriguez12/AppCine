@@ -3,11 +3,13 @@ import { Router } from 'express';
 import { db } from '../config/firebase';
 import {
   obtenerProductosCandy,
+  obtenerProductosCandyPorTipo, 
   obtenerProductoCandy,
   crearProductoCandy,
   actualizarProductoCandy,
   eliminarProductoCandy,
 } from '../services/candyProducts';
+import { TipoProducto } from '../models/candyProduct';
 
 const router = Router();
 
@@ -19,6 +21,26 @@ router.get('/', async (_req, res) => {
   } catch (error: any) {
     console.error('Error obteniendo productos de Candy Shop:', error);
     res.status(500).json({ error: 'Error obteniendo productos' });
+  }
+});
+
+//GET /api/candy-products/type/:tipo -> lista por tipo
+router.get('/type/:tipo', async (req, res) => {
+  try {
+    const tipo = req.params.tipo as TipoProducto;
+
+    const tiposValidos: TipoProducto[] = ['promocion', 'bebida', 'comida', 'otros'];
+    if (!tiposValidos.includes(tipo)) {
+      return res
+        .status(400)
+        .json({ error: `Tipo inválido. Valores permitidos: ${tiposValidos.join(', ')}` });
+    }
+
+    const productos = await obtenerProductosCandyPorTipo(tipo);
+    return res.json(productos);
+  } catch (error: any) {
+    console.error('Error obteniendo productos por tipo:', error);
+    return res.status(500).json({ error: 'Error obteniendo productos por tipo' });
   }
 });
 

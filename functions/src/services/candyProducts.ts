@@ -1,6 +1,6 @@
 // functions/src/services/candyProducts.ts
 import { db } from '../config/firebase';
-import { CandyProduct } from '../models/candyProduct';
+import { CandyProduct, TipoProducto } from '../models/candyProduct';
 
 const COLLECTION = 'candyProducts';
 
@@ -8,6 +8,21 @@ export const obtenerProductosCandy = async (): Promise<CandyProduct[]> => {
   const snapshot = await db
     .collection(COLLECTION)
     .where('activo', '==', true)
+    .get();
+
+  return snapshot.docs.map((doc) => ({
+    ...(doc.data() as CandyProduct),
+    id: doc.id,
+  }));
+};
+
+export const obtenerProductosCandyPorTipo = async (
+  tipo: TipoProducto
+): Promise<CandyProduct[]> => {
+  const snapshot = await db
+    .collection(COLLECTION)
+    .where('activo', '==', true)
+    .where('tipo', '==', tipo)
     .get();
 
   return snapshot.docs.map((doc) => ({
