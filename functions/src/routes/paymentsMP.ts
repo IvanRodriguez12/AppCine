@@ -1,17 +1,20 @@
 // functions/src/routes/paymentsMp.ts
 import { Router } from 'express';
+import axios from 'axios';
 import { crearOrdenCandyDesdePagoMp } from '../services/candyOrders';
 import { reservarAsientos } from '../services/firestoreTickets';
 import {
   crearPreferenciaCandyMp,
   crearPreferenciaTicketMp,
   obtenerPagoMp,
-  crearPreferenciaSubscriptionMp,   
+  crearPreferenciaSubscriptionMp,
 } from '../services/paymentsMP';
-import { db } from '../config/firebase'; 
-import { PREMIUM_PLAN } from '../config/subscriptionPlan'; 
+import { db } from '../config/firebase';
+import { PREMIUM_PLAN } from '../config/subscriptionPlan';
 
 const router = Router();
+
+const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
 
 /**
  * POST /payments/mp/create-preference
@@ -83,22 +86,90 @@ router.post('/webhook', async (req, res) => {
     console.log('Query:', req.query);
     console.log('Body:', JSON.stringify(req.body));
 
-    const paymentId =
-      (req.query['data.id'] as string) ||
-      (req.query.id as string) ||
-      (req.body?.data && req.body.data.id);
-
-    const type =
+    // 1) Determinar topic (payment / merchant_order / otro)
+    let topic =
       (req.query.type as string) ||
       (req.query.topic as string) ||
-      req.body?.type;
+      (req.body && (req.body.type || req.body.topic));
 
-    if (!paymentId || type !== 'payment') {
-      console.warn('Webhook inválido: falta paymentId o type != payment');
+    let paymentId: string | undefined;
+
+    /**
+     * CASO A: topic = 'payment'
+     *  - Viene data.id o id directamente
+     */
+    if (topic === 'payment') {
+      paymentId =
+        (req.query['data.id'] as string) ||
+        (req.query.id as string) ||
+        (req.body?.data && req.body.data.id);
+
+      console.log('Webhook payment → paymentId encontrado:', paymentId);
+    }
+
+    /**
+     * CASO B: topic = 'merchant_order'
+     *  - Tenemos merchant_order_id y hay que pedirle a MP los payments
+     */
+    if (topic === 'merchant_order') {
+      const merchantOrderIdFromQuery = req.query.id as string | undefined;
+      const merchantOrderIdFromBody =
+        typeof req.body?.resource === 'string'
+          ? req.body.resource.split('/').pop()
+          : undefined;
+
+      const merchantOrderId = merchantOrderIdFromQuery || merchantOrderIdFromBody;
+
+      console.log('Webhook merchant_order → merchantOrderId:', merchantOrderId);
+
+      if (!merchantOrderId) {
+        console.warn('merchant_order sin id válido');
+      } else if (!MP_ACCESS_TOKEN) {
+        console.error(
+          'MP_ACCESS_TOKEN no está definido; no se puede consultar merchant_order'
+        );
+      } else {
+        try {
+          const merchantOrderUrl =
+            req.body?.resource ||
+            `https://api.mercadolibre.com/merchant_orders/${merchantOrderId}`;
+
+          const moResp = await axios.get(merchantOrderUrl, {
+            headers: {
+              Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+            },
+          });
+
+          const merchantOrder = moResp.data as any;
+          const payment =
+            Array.isArray(merchantOrder.payments) &&
+            merchantOrder.payments.length > 0
+              ? merchantOrder.payments[0]
+              : undefined;
+
+          if (!payment || !payment.id) {
+            console.warn(
+              'merchant_order sin payments asociados:',
+              merchantOrderId
+            );
+          } else {
+            paymentId = String(payment.id);
+            console.log(
+              `merchant_order ${merchantOrderId} -> paymentId ${paymentId} (status=${payment.status})`
+            );
+          }
+        } catch (moError) {
+          console.error('Error consultando merchant_order en MP:', moError);
+        }
+      }
+    }
+
+    if (!paymentId) {
+      console.warn('Webhook inválido: no se pudo determinar paymentId');
       return res.status(200).send('ignored');
     }
 
-    // Leer pago real de MercadoPago
+    // 2) Leer pago real de MercadoPago
     const pago: any = await obtenerPagoMp(paymentId);
 
     console.log(
@@ -111,7 +182,7 @@ router.post('/webhook', async (req, res) => {
     console.log('=== METADATA PAGO ===');
     console.log(JSON.stringify(pago.metadata, null, 2));
 
-    // Procesamiento
+    // 3) Procesamiento según metadata
     if (pago.status === 'approved' && pago.metadata) {
       const metadata = pago.metadata as any;
 
@@ -172,12 +243,14 @@ router.post('/webhook', async (req, res) => {
         }
       }
 
-      // 3) NUEVO: Suscripción Premium
+      // 3) Suscripción Premium
       else if (metadata?.tipo === 'subscription') {
         try {
           const userId = metadata.userId || metadata.user_id;
           const months =
-            typeof metadata.months === 'number' ? metadata.months : PREMIUM_PLAN.months;
+            typeof metadata.months === 'number'
+              ? metadata.months
+              : PREMIUM_PLAN.months;
 
           if (!userId) {
             console.warn('Metadata de suscripción sin userId');
@@ -220,7 +293,6 @@ router.post('/webhook', async (req, res) => {
     }
 
     return res.status(200).send('ok');
-
   } catch (error) {
     console.error('Error procesando webhook MP:', error);
     return res.status(200).send('ok');

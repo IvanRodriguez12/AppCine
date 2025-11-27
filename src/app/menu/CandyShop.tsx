@@ -2,77 +2,36 @@ import Header from '@/components/Header';
 import { useCarrito } from '@/context/CarritoContext';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  Alert,
+  FlatList,
+  Image,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
-const PRODUCTOS = [
-  {
-    id: '1',
-    nombre: 'Combo Pochoclo + Gaseosa',
-    tipo: 'promocion',
-    imagen: require('../../assets/images/palomitas1.jpeg'),
-    precios: { pequeño: 2.5, mediano: 3.5, grande: 4.5 },
-    categoria: 'comida',
-  },
-  {
-    id: '2',
-    nombre: 'Gaseosa',
-    tipo: 'bebida',
-    imagen: require('../../assets/images/cocacola.jpeg'),
-    precios: { pequeño: 1.5, mediano: 2.0, grande: 2.5 },
-    categoria: 'bebida',
-  },
-  {
-    id: '3',
-    nombre: 'Agua',
-    tipo: 'bebida',
-    imagen: require('../../assets/images/agua.jpeg'),
-    precios: { pequeño: 1.0, mediano: 1.5, grande: 2.0 },
-    categoria: 'bebida',
-  },
-  {
-    id: '4',
-    nombre: 'Agua saborizada',
-    tipo: 'bebida',
-    imagen: require('../../assets/images/aguasaborizada.jpeg'),
-    precios: { pequeño: 1.2, mediano: 1.7, grande: 2.2 },
-    categoria: 'bebida',
-  },
-  {
-    id: '5',
-    nombre: 'Pochoclo',
-    tipo: 'comida',
-    imagen: require('../../assets/images/palomitas1.jpeg'),
-    precios: { pequeño: 2.0, mediano: 3.0, grande: 4.0 },
-    categoria: 'comida',
-  },
-  {
-    id: '6',
-    nombre: 'Turrón',
-    tipo: 'otros',
-    imagen: require('../../assets/images/turron.jpeg'),
-    precios: { único: 1.0 },
-    categoria: 'otros',
-  },
-  {
-    id: '7',
-    nombre: 'Alfajor',
-    tipo: 'otros',
-    imagen: require('../../assets/images/alfajor.jpeg'),
-    precios: { único: 1.2 },
-    categoria: 'otros',
-  },
-  {
-    id: '8',
-    nombre: 'Papas fritas',
-    tipo: 'comida',
-    imagen: require('../../assets/images/papas.jpeg'),
-    precios: { único: 1.8 },
-    categoria: 'otros',
-  }
-];
+// 🆕 API
+import apiClient, { handleApiResponse, handleApiError } from '@/api/client';
+import { CANDY_ENDPOINTS } from '@/api/endpoints';
+
+// 🔹 Tipo básico según tu modelo CandyProduct del backend
+type CandyProductApi = {
+  id: string;
+  nombre: string;
+  tipo: 'promocion' | 'bebida' | 'comida' | 'otros';
+  categoria: 'bebida' | 'comida' | 'otros';
+  precios: Record<string, number>;
+  imageKey?: string;
+  stock: number;
+  activo: boolean;
+};
 
 const CATEGORIAS = [
   { label: 'Todos', value: 'todos' },
@@ -86,9 +45,17 @@ const TAMANIOS = ['pequeño', 'mediano', 'grande'];
 
 const CandyShop = () => {
   const insets = useSafeAreaInsets();
+
+  // 🆕 Estado para productos desde backend
+  const [productos, setProductos] = useState<CandyProductApi[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [categoria, setCategoria] = useState('todos');
-  const [tamaniosSeleccionados, setTamaniosSeleccionados] = useState<{ [key: string]: string }>({});
-  
+  const [tamaniosSeleccionados, setTamaniosSeleccionados] = useState<{
+    [key: string]: string;
+  }>({});
+
   const {
     state: { items: carrito },
     agregarItem,
@@ -100,65 +67,107 @@ const CandyShop = () => {
     getTotalPrecio,
   } = useCarrito();
 
+  // 🆕 Cargar productos desde el backend al montar la pantalla
+  useEffect(() => {
+    const fetchProductos = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await apiClient.get(CANDY_ENDPOINTS.GET_PRODUCTS);
+        const { success, data, error: apiErr } =
+          handleApiResponse<CandyProductApi[]>(response);
+
+        if (!success || !data) {
+          throw new Error(apiErr || 'No se pudieron cargar los productos');
+        }
+
+        setProductos(data);
+      } catch (err: any) {
+        console.error('Error cargando productos Candy:', err);
+        const apiError = handleApiError(err);
+        setError(apiError.error || 'Error cargando productos');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProductos();
+  }, []);
+
   const filtrarProductos = () => {
-    if (categoria === 'todos') return PRODUCTOS;
-    if (categoria === 'promocion') return PRODUCTOS.filter(p => p.tipo === 'promocion');
-    return PRODUCTOS.filter(p => p.categoria === categoria);
+    if (categoria === 'todos') return productos;
+    if (categoria === 'promocion')
+      return productos.filter((p) => p.tipo === 'promocion');
+    return productos.filter((p) => p.categoria === categoria);
   };
 
   const handleSeleccionTamanio = (productoId: string, tamanio: string) => {
-    setTamaniosSeleccionados(prev => ({ ...prev, [productoId]: tamanio }));
+    setTamaniosSeleccionados((prev) => ({ ...prev, [productoId]: tamanio }));
   };
 
-  const tieneTamanios = (producto: any) => {
+  const tieneTamanios = (producto: CandyProductApi) => {
     return Object.keys(producto.precios).length > 1;
   };
 
-  const getProductoEnCarrito = (producto: any) => {
+  const getProductoEnCarrito = (producto: CandyProductApi) => {
     const tamanio = tieneTamanios(producto)
-      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      ? tamaniosSeleccionados[producto.id] || 'mediano'
       : 'único';
-    
+
     const productKey = getProductKey(producto, tamanio);
     return getItemByKey(productKey);
   };
 
-  const agregarAlCarrito = (producto: any) => {
+  const agregarAlCarrito = (producto: CandyProductApi) => {
     const tamanio = tieneTamanios(producto)
-      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      ? tamaniosSeleccionados[producto.id] || 'mediano'
       : 'único';
-    
+
     const precio = producto.precios[tamanio];
-    
+
+    if (typeof precio !== 'number') {
+      Alert.alert(
+        'Error',
+        'No se encontró precio para el tamaño seleccionado.'
+      );
+      return;
+    }
+
     agregarItem({
       ...producto,
+      // 🧊 Imagen placeholder por ahora, después la cambiamos por imageKey
+      imagen: require('../../assets/images/palomitas1.jpeg'),
       tamanio,
       precio,
-      cantidad: 1
+      cantidad: 1,
     });
   };
 
-  const handleIncrementarCantidad = (producto: any) => {
+  const handleIncrementarCantidad = (producto: CandyProductApi) => {
     const tamanio = tieneTamanios(producto)
-      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      ? tamaniosSeleccionados[producto.id] || 'mediano'
       : 'único';
-    
+
     const productKey = getProductKey(producto, tamanio);
     incrementarCantidad(productKey);
   };
 
-  const handleDecrementarCantidad = (producto: any) => {
+  const handleDecrementarCantidad = (producto: CandyProductApi) => {
     const tamanio = tieneTamanios(producto)
-      ? (tamaniosSeleccionados[producto.id] || 'mediano')
+      ? tamaniosSeleccionados[producto.id] || 'mediano'
       : 'único';
-    
+
     const productKey = getProductKey(producto, tamanio);
     decrementarCantidad(productKey);
   };
 
   const handleIrAlCarrito = () => {
     if (carrito.length === 0) {
-      Alert.alert('Carrito vacío', 'Selecciona al menos un producto para continuar');
+      Alert.alert(
+        'Carrito vacío',
+        'Selecciona al menos un producto para continuar'
+      );
       return;
     }
 
@@ -167,11 +176,15 @@ const CandyShop = () => {
     });
   };
 
+  const productosFiltrados = filtrarProductos();
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="CineApp" onBack={() => {router.back()}} />
+      <Header title="CineApp" onBack={() => router.back()} />
+
+      {/* Filtros por categoría */}
       <View style={styles.filtrosRow}>
-        {CATEGORIAS.map(cat => (
+        {CATEGORIAS.map((cat) => (
           <TouchableOpacity
             key={cat.value}
             style={[
@@ -180,106 +193,152 @@ const CandyShop = () => {
             ]}
             onPress={() => setCategoria(cat.value)}
           >
-            <Text style={[
-              styles.filtroBtnText,
-              categoria === cat.value && styles.filtroBtnTextActivo,
-            ]}>
+            <Text
+              style={[
+                styles.filtroBtnText,
+                categoria === cat.value && styles.filtroBtnTextActivo,
+              ]}
+            >
               {cat.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <FlatList
-        data={filtrarProductos()}
-        keyExtractor={item => item.id}
-        contentContainerStyle={[
-          styles.lista,
-          { paddingBottom: 100 + insets.bottom },
-        ]}
-        renderItem={({ item }) => {
-          const tieneTamanios = Object.keys(item.precios).length > 1;
-          const tamanioSeleccionado = tieneTamanios
-            ? (tamaniosSeleccionados[item.id] || 'mediano')
-            : 'único';
+      {/* Loading / Error */}
+      {loading && (
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="red" />
+          <Text style={{ color: 'white', marginTop: 10 }}>
+            Cargando productos...
+          </Text>
+        </View>
+      )}
 
-          const precio = (item.precios as any)[tamanioSeleccionado];
-          const productoEnCarrito = getProductoEnCarrito(item);
+      {error && !loading && (
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <Text style={{ color: 'red', marginBottom: 10 }}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => {
+              // Forzar recarga simple
+              setCategoria('todos');
+              // Vuelve a disparar el useEffect si querés con otra estrategia,
+              // por ahora el usuario puede hacer pull-to-refresh en el futuro.
+            }}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              backgroundColor: 'red',
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: 'bold' }}>
+              Reintentar
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-          return (
-            <View style={styles.card}>
-              <Image source={item.imagen} style={styles.imagen} />
-              <View style={styles.info}>
-                <Text style={styles.nombre}>{item.nombre}</Text>
+      {!loading && !error && (
+        <FlatList
+          data={productosFiltrados}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.lista,
+            { paddingBottom: 100 + insets.bottom },
+          ]}
+          renderItem={({ item }) => {
+            const tieneVariosTamanios = Object.keys(item.precios).length > 1;
+            const tamanioSeleccionado = tieneVariosTamanios
+              ? tamaniosSeleccionados[item.id] || 'mediano'
+              : 'único';
 
-                {tieneTamanios && (
-                  <View style={styles.tamaniosRow}>
-                    {TAMANIOS.map(tam => (
+            const precio = item.precios[tamanioSeleccionado];
+            const productoEnCarrito = getProductoEnCarrito(item);
+
+            return (
+              <View style={styles.card}>
+                {/* 🧊 Por ahora imagen fija */}
+                <Image
+                  source={require('../../assets/images/palomitas1.jpeg')}
+                  style={styles.imagen}
+                />
+                <View style={styles.info}>
+                  <Text style={styles.nombre}>{item.nombre}</Text>
+
+                  {tieneVariosTamanios && (
+                    <View style={styles.tamaniosRow}>
+                      {TAMANIOS.map((tam) => (
+                        <TouchableOpacity
+                          key={tam}
+                          style={[
+                            styles.tamanioBtn,
+                            (tamaniosSeleccionados[item.id] || 'mediano') ===
+                              tam && styles.tamanioBtnActivo,
+                          ]}
+                          onPress={() =>
+                            handleSeleccionTamanio(item.id, tam)
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.tamanioBtnText,
+                              (tamaniosSeleccionados[item.id] ||
+                                'mediano') === tam &&
+                                styles.tamanioBtnTextActivo,
+                            ]}
+                          >
+                            {tam.charAt(0).toUpperCase() + tam.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  <Text style={styles.precio}>${precio} USD</Text>
+
+                  {!productoEnCarrito ? (
+                    <TouchableOpacity
+                      style={styles.agregarBtn}
+                      onPress={() => agregarAlCarrito(item)}
+                    >
+                      <Ionicons name="cart" size={18} color="white" />
+                      <Text style={styles.agregarBtnText}>Agregar</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.cantidadControles}>
                       <TouchableOpacity
-                        key={tam}
-                        style={[
-                          styles.tamanioBtn,
-                          (tamaniosSeleccionados[item.id] || 'mediano') === tam && styles.tamanioBtnActivo,
-                        ]}
-                        onPress={() => handleSeleccionTamanio(item.id, tam)}
+                        style={styles.cantidadBtn}
+                        onPress={() => handleDecrementarCantidad(item)}
                       >
-                        <Text style={[
-                          styles.tamanioBtnText,
-                          (tamaniosSeleccionados[item.id] || 'mediano') === tam && styles.tamanioBtnTextActivo,
-                        ]}>
-                          {tam.charAt(0).toUpperCase() + tam.slice(1)}
-                        </Text>
+                        <Ionicons name="remove" size={16} color="white" />
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
 
-                <Text style={styles.precio}>${precio} USD</Text>
+                      <Text style={styles.cantidadText}>
+                        {productoEnCarrito.cantidad}
+                      </Text>
 
-                {!productoEnCarrito ? (
-                  <TouchableOpacity
-                    style={styles.agregarBtn}
-                    onPress={() => agregarAlCarrito(item)}
-                  >
-                    <Ionicons name="cart" size={18} color="white" />
-                    <Text style={styles.agregarBtnText}>Agregar</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.cantidadControles}>
-                    <TouchableOpacity
-                      style={styles.cantidadBtn}
-                      onPress={() => handleDecrementarCantidad(item)}
-                    >
-                      <Ionicons name="remove" size={16} color="white" />
-                    </TouchableOpacity>
-                    
-                    <Text style={styles.cantidadText}>
-                      {productoEnCarrito.cantidad}
-                    </Text>
-                    
-                    <TouchableOpacity
-                      style={styles.cantidadBtn}
-                      onPress={() => handleIncrementarCantidad(item)}
-                    >
-                      <Ionicons name="add" size={16} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                )}
+                      <TouchableOpacity
+                        style={styles.cantidadBtn}
+                        onPress={() => handleIncrementarCantidad(item)}
+                      >
+                        <Ionicons name="add" size={16} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
-          );
-        }}
-      />
+            );
+          }}
+        />
+      )}
 
       <View style={[styles.carritoBar, { paddingBottom: insets.bottom }]}>
         <FontAwesome5 name="shopping-cart" size={22} color="white" />
         <Text style={styles.carritoText}>
           {getTotalItems()} producto(s) - Total: ${getTotalPrecio().toFixed(2)}
         </Text>
-        <TouchableOpacity 
-          style={styles.pagarBtn}
-          onPress={handleIrAlCarrito}
-        >
+        <TouchableOpacity style={styles.pagarBtn} onPress={handleIrAlCarrito}>
           <Text style={styles.pagarBtnText}>Ir al Carrito</Text>
         </TouchableOpacity>
       </View>
