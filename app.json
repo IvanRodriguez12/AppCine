@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/icon.png",
-    "scheme": "Cineapp",
+    "scheme": "cineapp",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./src/assets/images/splash-icon.png",
@@ -18,7 +18,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cineapp",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "package": "com.cineapp",
@@ -32,9 +35,15 @@
         "ACCESS_NETWORK_STATE",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
-      "versionCode": 1
+      "versionCode": 1,
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "favicon": "./src/assets/images/favicon.png"
@@ -64,6 +73,9 @@
         "projectId": "1b30abd7-7ffa-4a10-bd28-4d273cac3b9a"
       }
     },
-    "owner": "lucianorodriguez"
+    "owner": "lucianorodriguez",
+    "updates": {
+      "url": "https://u.expo.dev/1b30abd7-7ffa-4a10-bd28-4d273cac3b9a"
+    }
   }
 }
