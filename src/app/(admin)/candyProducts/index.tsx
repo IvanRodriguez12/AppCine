@@ -1,5 +1,6 @@
-import { router, useFocusEffect } from 'expo-router';
-import React, { useState, useCallback, useRef } from 'react';
+// app/(admin)/candyProducts/index.tsx
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,201 +11,263 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { moderateScale, verticalScale } from 'react-native-size-matters';
-import adminCandyProductsService, {
-  CandyProduct,
+import { useAuth } from '@/context/authContext';
+import AdminCandyProductsService, { 
+  CandyProduct, 
   ProductStats,
-  FiltrosProductos,
+  FiltrosProductos 
 } from '@/services/adminCandyProductsService';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function CandyProductsList() {
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: string;
+  color: string;
+  subtitle?: string;
+}
+
+const StatCard = ({ title, value, icon, color, subtitle }: StatCardProps) => (
+  <View style={[styles.statCard, { borderLeftColor: color }]}>
+    <Text style={styles.statIcon}>{icon}</Text>
+    <View style={styles.statContent}>
+      <Text style={styles.statTitle}>{title}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+    </View>
+  </View>
+);
+
+const ProductCard = ({ product, onEdit, onToggleActive, onDelete }: {
+  product: CandyProduct;
+  onEdit: (product: CandyProduct) => void;
+  onToggleActive: (product: CandyProduct) => void;
+  onDelete: (product: CandyProduct) => void;
+}) => (
+  <View style={styles.productCard}>
+    <View style={styles.productHeader}>
+      <View style={styles.productInfo}>
+        <Text style={styles.productName}>{product.nombre}</Text>
+        <View style={styles.productMeta}>
+          <Text style={styles.productCategory}>{product.categoria}</Text>
+          <Text style={styles.productType}>• {product.tipo}</Text>
+        </View>
+      </View>
+      <View style={[
+        styles.statusBadge,
+        { backgroundColor: product.activo ? '#10B981' : '#EF4444' }
+      ]}>
+        <Text style={styles.statusText}>
+          {product.activo ? 'Activo' : 'Inactivo'}
+        </Text>
+      </View>
+    </View>
+
+    <View style={styles.productDetails}>
+      <View style={styles.stockSection}>
+        <Text style={[
+          styles.stockText,
+          product.stock === 0 ? styles.stockZero : 
+          product.stock <= 10 ? styles.stockLow : styles.stockNormal
+        ]}>
+          Stock: {product.stock} unidades
+        </Text>
+      </View>
+      
+      <View style={styles.pricesSection}>
+        <Text style={styles.pricesTitle}>Precios:</Text>
+        <View style={styles.pricesRow}>
+          <Text style={styles.price}>Chico: ${product.precios.chico}</Text>
+          <Text style={styles.price}>Mediano: ${product.precios.mediano}</Text>
+          <Text style={styles.price}>Grande: ${product.precios.grande}</Text>
+        </View>
+      </View>
+    </View>
+
+    <View style={styles.actions}>
+      <TouchableOpacity 
+        style={[styles.actionButton, styles.editButton]}
+        onPress={() => onEdit(product)}
+      >
+        <Ionicons name="pencil" size={16} color="#FFFFFF" />
+        <Text style={styles.actionText}>Editar</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[
+          styles.actionButton, 
+          product.activo ? styles.deactivateButton : styles.activateButton
+        ]}
+        onPress={() => onToggleActive(product)}
+      >
+        <Ionicons 
+          name={product.activo ? "eye-off" : "eye"} 
+          size={16} 
+          color="#FFFFFF" 
+        />
+        <Text style={styles.actionText}>
+          {product.activo ? 'Desactivar' : 'Activar'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.actionButton, styles.deleteButton]}
+        onPress={() => onDelete(product)}
+      >
+        <Ionicons name="trash" size={16} color="#FFFFFF" />
+        <Text style={styles.actionText}>Eliminar</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+export default function CandyProductsScreen() {
+  const { user, logout } = useAuth();
   const [productos, setProductos] = useState<CandyProduct[]>([]);
   const [stats, setStats] = useState<ProductStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [filtros, setFiltros] = useState<FiltrosProductos>({});
   const [loadAttempts, setLoadAttempts] = useState(0);
-  const isLoadingRef = useRef(false);
 
-  // Filtros
-  const [filtroActivo, setFiltroActivo] = useState<'TODOS' | 'ACTIVOS' | 'INACTIVOS'>(
-    'TODOS'
-  );
-  const [filtroStock, setFiltroStock] = useState<'TODOS' | 'SIN_STOCK' | 'BAJO_STOCK'>(
-    'TODOS'
-  );
+  useEffect(() => {
+    loadProducts();
+  }, [filtros]);
 
-  // Solo cargar al montar o al volver con useFocusEffect
-  useFocusEffect(
-    useCallback(() => {
-      console.log('🍬 Pantalla de productos enfocada');
-      loadData();
-      
-      return () => {
-        console.log('🍬 Pantalla de productos desenfocada');
-      };
-    }, []) // ✅ Array vacío - solo al enfocar/desenfocar
-  );
-
-  // Cargar datos cuando cambien los filtros
-  React.useEffect(() => {
-    console.log('🔄 Filtros cambiados, recargando...');
-    loadData();
-  }, [filtroActivo, filtroStock]);
-
-  const loadData = async () => {
-    // ⛔ CRÍTICO: Evitar múltiples requests simultáneos
-    if (isLoadingRef.current) {
-      console.log('⚠️ Ya hay una carga en progreso, ignorando...');
+  const loadProducts = async () => {
+    if (isLoading && loadAttempts > 0) {
+      console.log('⚠️ Carga ya en progreso, ignorando...');
       return;
     }
 
     try {
-      isLoadingRef.current = true;
       setIsLoading(true);
       setLoadAttempts(prev => prev + 1);
-
-      console.log('📊 Cargando productos y estadísticas...');
-
-      // Cargar productos con filtros
-      const filtros: FiltrosProductos = {};
-      if (filtroActivo === 'ACTIVOS') filtros.activo = true;
-      if (filtroActivo === 'INACTIVOS') filtros.activo = false;
-      if (filtroStock === 'SIN_STOCK') filtros.sinStock = true;
-
-      const [productosResult, statsResult] = await Promise.all([
-        adminCandyProductsService.getProductos(filtros),
-        adminCandyProductsService.getStats(),
-      ]);
-
+      
+      console.log('🍬 Cargando productos...');
+      
+      // Cargar productos
+      const productosResult = await AdminCandyProductsService.getProductos(filtros);
       if (productosResult.success && productosResult.data) {
-        let productosData = productosResult.data.productos || [];
-
-        // Filtro adicional para bajo stock (cliente)
-        if (filtroStock === 'BAJO_STOCK') {
-          productosData = productosData.filter((p) => p.stock > 0 && p.stock <= 10);
-        }
-
-        setProductos(productosData);
-        console.log(`✅ ${productosData.length} productos cargados`);
-      } else {
-        console.error('❌ Error cargando productos:', productosResult.error);
-        Alert.alert('Error', productosResult.error || 'No se pudieron cargar productos');
+        setProductos(productosResult.data.productos);
+        console.log(`✅ ${productosResult.data.productos.length} productos cargados`);
       }
 
+      // Cargar estadísticas
+      const statsResult = await AdminCandyProductsService.getStats();
       if (statsResult.success && statsResult.data) {
         setStats(statsResult.data.data);
-        console.log('✅ Estadísticas cargadas');
+        console.log('📊 Estadísticas cargadas');
       }
     } catch (error) {
-      console.error('❌ Error cargando datos:', error);
-      Alert.alert('Error', 'Error al cargar los productos');
+      console.error('❌ Error cargando productos:', error);
+      Alert.alert('Error', 'No se pudieron cargar los productos');
     } finally {
       setIsLoading(false);
       setLoadAttempts(0);
-      isLoadingRef.current = false;
     }
   };
 
   const handleRefresh = async () => {
-    if (isRefreshing || isLoadingRef.current) {
-      console.log('⚠️ Refresh ya en progreso');
-      return;
-    }
+    if (isRefreshing) return;
     
     setIsRefreshing(true);
-    await loadData();
+    await loadProducts();
     setIsRefreshing(false);
   };
 
-  const handleToggleActivo = async (producto: CandyProduct) => {
-    const nuevoEstado = !producto.activo;
-    const mensaje = nuevoEstado
-      ? '¿Activar este producto?'
-      : '¿Desactivar este producto? Los clientes no podrán verlo.';
-
-    Alert.alert('Confirmar', mensaje, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Confirmar',
-        onPress: async () => {
-          try {
-            const result = await adminCandyProductsService.cambiarEstadoActivo(
-              producto.id,
-              nuevoEstado
-            );
-
-            if (result.success) {
-              Alert.alert(
-                'Éxito',
-                `Producto ${nuevoEstado ? 'activado' : 'desactivado'}`
-              );
-              await loadData();
-            } else {
-              Alert.alert('Error', result.error || 'No se pudo cambiar el estado');
-            }
-          } catch (error) {
-            Alert.alert('Error', 'Error al cambiar el estado');
-          }
-        },
-      },
-    ]);
+  const handleToggleActive = async (producto: CandyProduct) => {
+    try {
+      const result = await AdminCandyProductsService.cambiarEstadoActivo(
+        producto.id, 
+        !producto.activo
+      );
+      
+      if (result.success) {
+        // Actualizar lista localmente
+        setProductos(prev => 
+          prev.map(p => 
+            p.id === producto.id 
+              ? { ...p, activo: !p.activo }
+              : p
+          )
+        );
+        
+        Alert.alert(
+          'Éxito', 
+          `Producto ${!producto.activo ? 'activado' : 'desactivado'}`
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo cambiar el estado del producto');
+    }
   };
 
-  const handleAjustarStock = (producto: CandyProduct) => {
-    Alert.prompt(
-      'Ajustar Stock',
-      `Stock actual: ${producto.stock}`,
+  const handleDelete = (producto: CandyProduct) => {
+    Alert.alert(
+      'Eliminar Producto',
+      `¿Estás seguro de eliminar permanentemente "${producto.nombre}"? Esta acción no se puede deshacer.`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Guardar',
-          onPress: async (nuevoStock) => {
-            const stockNum = parseInt(nuevoStock || '0', 10);
-            if (isNaN(stockNum) || stockNum < 0) {
-              Alert.alert('Error', 'Stock inválido');
-              return;
-            }
-
+        { 
+          text: 'Eliminar', 
+          style: 'destructive',
+          onPress: async () => {
             try {
-              const result = await adminCandyProductsService.ajustarStock(
-                producto.id,
-                stockNum,
-                'Ajuste manual desde app'
-              );
-
+              const result = await AdminCandyProductsService.eliminarProducto(producto.id);
               if (result.success) {
-                Alert.alert('Éxito', 'Stock actualizado correctamente');
-                await loadData();
-              } else {
-                Alert.alert('Error', result.error || 'No se pudo ajustar el stock');
+                Alert.alert('Éxito', 'Producto eliminado permanentemente');
+                loadProducts(); // Recargar lista
               }
             } catch (error) {
-              Alert.alert('Error', 'Error al ajustar el stock');
+              Alert.alert('Error', 'No se pudo eliminar el producto');
             }
-          },
-        },
-      ],
-      'plain-text',
-      String(producto.stock)
+          }
+        }
+      ]
     );
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 0,
-    }).format(value);
+  const handleEdit = (producto: CandyProduct) => {
+    console.log('✏️ Editando producto:', producto.id);
+    router.push(`/(admin)/candyProducts/${producto.id}`);
   };
 
-  const getStockColor = (stock: number) => {
-    if (stock === 0) return '#F44336';
-    if (stock <= 10) return '#FF9800';
-    return '#4CAF50';
+  const handleLogout = () => {
+    Alert.alert(
+      'Cerrar Sesión',
+      '¿Estás seguro que deseas cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Cerrar Sesión', 
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+          }
+        }
+      ]
+    );
   };
 
-  if (isLoading && productos.length === 0) {
+  const navigateToCreate = () => {
+    console.log('🆕 Navegando a crear producto...');
+    router.push('/(admin)/candyProducts/crear');
+  };
+
+  const navigateToDashboard = () => {
+    console.log('📊 Volviendo al dashboard...');
+    router.push('/(admin)/dashboard');
+  };
+
+  const formatNumber = (value: number | undefined | null): string => {
+    return value?.toString() || '0';
+  };
+
+  if (isLoading && !isRefreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#E50914" />
@@ -217,6 +280,7 @@ export default function CandyProductsList() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -225,205 +289,163 @@ export default function CandyProductsList() {
           />
         }
       >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={navigateToDashboard}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.welcomeText}>Gestión de Productos</Text>
+              <Text style={styles.roleText}>🍬 Catálogo de Golosinas</Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.createButton}
+            onPress={navigateToCreate}
+          >
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.createButtonText}>Nuevo</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Filtros */}
+        <View style={styles.filtersSection}>
+          <Text style={styles.sectionTitle}>🎯 Filtros</Text>
+          <View style={styles.filtersRow}>
+            <TouchableOpacity 
+              style={[
+                styles.filterButton,
+                Object.keys(filtros).length === 0 && styles.filterButtonActive
+              ]}
+              onPress={() => setFiltros({})}
+            >
+              <Text style={styles.filterButtonText}>Todos</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.filterButton,
+                filtros.activo === true && styles.filterButtonActive
+              ]}
+              onPress={() => setFiltros({ activo: true })}
+            >
+              <Text style={styles.filterButtonText}>Activos</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.filterButton,
+                filtros.activo === false && styles.filterButtonActive
+              ]}
+              onPress={() => setFiltros({ activo: false })}
+            >
+              <Text style={styles.filterButtonText}>Inactivos</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.filterButton,
+                filtros.sinStock && styles.filterButtonActive
+              ]}
+              onPress={() => setFiltros({ sinStock: true })}
+            >
+              <Text style={styles.filterButtonText}>Sin Stock</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Estadísticas */}
         {stats && (
           <View style={styles.statsSection}>
-            <Text style={styles.statsTitle}>📊 Estadísticas</Text>
+            <Text style={styles.sectionTitle}>📊 Estadísticas</Text>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.total}</Text>
-                <Text style={styles.statLabel}>Total</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={[styles.statValue, { color: '#4CAF50' }]}>
-                  {stats.activos}
-                </Text>
-                <Text style={styles.statLabel}>Activos</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={[styles.statValue, { color: '#8C8C8C' }]}>
-                  {stats.inactivos}
-                </Text>
-                <Text style={styles.statLabel}>Inactivos</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={[styles.statValue, { color: '#F44336' }]}>
-                  {stats.sinStock}
-                </Text>
-                <Text style={styles.statLabel}>Sin Stock</Text>
-              </View>
+              <StatCard
+                title="Total Productos"
+                value={formatNumber(stats.total)}
+                icon="📦"
+                color="#3B82F6"
+              />
+              <StatCard
+                title="Activos"
+                value={formatNumber(stats.activos)}
+                icon="✅"
+                color="#10B981"
+              />
+              <StatCard
+                title="Sin Stock"
+                value={formatNumber(stats.sinStock)}
+                icon="⚠️"
+                color="#EF4444"
+              />
+              <StatCard
+                title="Bajo Stock"
+                value={formatNumber(stats.bajoStock)}
+                icon="📉"
+                color="#F59E0B"
+              />
             </View>
           </View>
         )}
 
-        {/* Filtros */}
-        <View style={styles.filtersSection}>
-          <Text style={styles.filtersTitle}>Filtros</Text>
-
-          <Text style={styles.filterLabel}>Estado:</Text>
-          <View style={styles.filterButtons}>
-            {(['TODOS', 'ACTIVOS', 'INACTIVOS'] as const).map((estado) => (
-              <TouchableOpacity
-                key={estado}
-                style={[
-                  styles.filterButton,
-                  filtroActivo === estado && styles.filterButtonActive,
-                ]}
-                onPress={() => {
-                  console.log(`🔘 Filtro activo: ${estado}`);
-                  setFiltroActivo(estado);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    filtroActivo === estado && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {estado}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.filterLabel}>Stock:</Text>
-          <View style={styles.filterButtons}>
-            {(['TODOS', 'SIN_STOCK', 'BAJO_STOCK'] as const).map((stock) => (
-              <TouchableOpacity
-                key={stock}
-                style={[
-                  styles.filterButton,
-                  filtroStock === stock && styles.filterButtonActive,
-                ]}
-                onPress={() => {
-                  console.log(`🔘 Filtro stock: ${stock}`);
-                  setFiltroStock(stock);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    filtroStock === stock && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {stock === 'SIN_STOCK'
-                    ? 'Sin Stock'
-                    : stock === 'BAJO_STOCK'
-                    ? 'Bajo Stock'
-                    : 'Todos'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Lista de productos */}
-        <View style={styles.productsContainer}>
-          <View style={styles.productsHeader}>
-            <Text style={styles.productsTitle}>🍬 Productos ({productos.length})</Text>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={() =>
-                Alert.alert(
-                  'Próximamente',
-                  'Creación de productos en desarrollo. Por ahora usa Firebase Console.'
-                )
-              }
+        {/* Lista de Productos */}
+        <View style={styles.productsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>🍬 Productos ({productos.length})</Text>
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={handleRefresh}
             >
-              <Text style={styles.createButtonText}>+ Crear</Text>
+              <Ionicons name="refresh" size={20} color="#E50914" />
             </TouchableOpacity>
           </View>
 
           {productos.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📦</Text>
-              <Text style={styles.emptyText}>No hay productos con estos filtros</Text>
+            <View style={styles.emptyState}>
+              <Ionicons name="cube-outline" size={64} color="#8C8C8C" />
+              <Text style={styles.emptyTitle}>No hay productos</Text>
+              <Text style={styles.emptyDescription}>
+                {Object.keys(filtros).length > 0 
+                  ? 'No se encontraron productos con los filtros aplicados'
+                  : 'Crea tu primer producto para comenzar'
+                }
+              </Text>
+              {Object.keys(filtros).length === 0 && (
+                <TouchableOpacity 
+                  style={styles.emptyActionButton}
+                  onPress={navigateToCreate}
+                >
+                  <Text style={styles.emptyActionText}>Crear Primer Producto</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
-            productos.map((producto) => (
-              <View key={producto.id} style={styles.productCard}>
-                {/* Header */}
-                <View style={styles.productHeader}>
-                  <Text style={styles.productName}>{producto.nombre}</Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.activeBadge,
-                      { backgroundColor: producto.activo ? '#4CAF50' : '#8C8C8C' },
-                    ]}
-                    onPress={() => handleToggleActivo(producto)}
-                  >
-                    <Text style={styles.activeBadgeText}>
-                      {producto.activo ? '✅ Activo' : '❌ Inactivo'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Descripción */}
-                <Text style={styles.productDescription}>{producto.descripcion}</Text>
-
-                {/* Info */}
-                <View style={styles.productInfo}>
-                  <Text style={styles.productInfoText}>
-                    📁 {producto.categoria} • 🏷️ {producto.tipo}
-                  </Text>
-                </View>
-
-                {/* Precios */}
-                <View style={styles.pricesRow}>
-                  <View style={styles.priceItem}>
-                    <Text style={styles.priceLabel}>Chico</Text>
-                    <Text style={styles.priceValue}>
-                      {formatCurrency(producto.precios.chico)}
-                    </Text>
-                  </View>
-                  <View style={styles.priceItem}>
-                    <Text style={styles.priceLabel}>Mediano</Text>
-                    <Text style={styles.priceValue}>
-                      {formatCurrency(producto.precios.mediano)}
-                    </Text>
-                  </View>
-                  <View style={styles.priceItem}>
-                    <Text style={styles.priceLabel}>Grande</Text>
-                    <Text style={styles.priceValue}>
-                      {formatCurrency(producto.precios.grande)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Stock */}
-                <View style={styles.stockRow}>
-                  <View
-                    style={[
-                      styles.stockBadge,
-                      { backgroundColor: getStockColor(producto.stock) },
-                    ]}
-                  >
-                    <Text style={styles.stockText}>
-                      📦 Stock: {producto.stock}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.adjustButton}
-                    onPress={() => handleAjustarStock(producto)}
-                  >
-                    <Text style={styles.adjustButtonText}>Ajustar</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Botón Ver Detalle */}
-                <TouchableOpacity
-                  style={styles.detailButton}
-                  onPress={() => {
-                    console.log(`🔍 Navegando a detalle: ${producto.id}`);
-                    router.push(`/(admin)/candyProducts/${producto.id}`);
-                  }}
-                >
-                  <Text style={styles.detailButtonText}>Ver Detalle →</Text>
-                </TouchableOpacity>
-              </View>
-            ))
+            <FlatList
+              data={productos}
+              renderItem={({ item }) => (
+                <ProductCard
+                  product={item}
+                  onEdit={handleEdit}
+                  onToggleActive={handleToggleActive}
+                  onDelete={handleDelete}
+                />
+              )}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
           )}
         </View>
+
+        {/* Botón de logout */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+        </TouchableOpacity>
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -447,65 +469,66 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: moderateScale(16),
+    paddingBottom: verticalScale(100),
   },
-  statsSection: {
-    backgroundColor: '#1A1A1A',
-    padding: moderateScale(16),
-    borderRadius: moderateScale(12),
-    marginBottom: verticalScale(16),
-  },
-  statsTitle: {
-    fontSize: moderateScale(16),
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: verticalScale(12),
-  },
-  statsGrid: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  statCard: {
     alignItems: 'center',
+    marginBottom: verticalScale(20),
   },
-  statValue: {
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    marginRight: moderateScale(12),
+    padding: moderateScale(4),
+  },
+  welcomeText: {
     fontSize: moderateScale(24),
     fontWeight: 'bold',
     color: '#FFFFFF',
+    marginBottom: verticalScale(2),
   },
-  statLabel: {
-    fontSize: moderateScale(12),
-    color: '#8C8C8C',
-    marginTop: verticalScale(4),
+  roleText: {
+    fontSize: moderateScale(14),
+    color: '#E50914',
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E50914',
+    paddingHorizontal: moderateScale(16),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(8),
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    marginLeft: moderateScale(4),
+    fontSize: moderateScale(14),
   },
   filtersSection: {
-    backgroundColor: '#1A1A1A',
-    padding: moderateScale(16),
-    borderRadius: moderateScale(12),
-    marginBottom: verticalScale(16),
+    marginBottom: verticalScale(20),
   },
-  filtersTitle: {
-    fontSize: moderateScale(16),
+  sectionTitle: {
+    fontSize: moderateScale(18),
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginBottom: verticalScale(12),
   },
-  filterLabel: {
-    fontSize: moderateScale(14),
-    color: '#8C8C8C',
-    marginTop: verticalScale(8),
-    marginBottom: verticalScale(8),
-  },
-  filterButtons: {
+  filtersRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: moderateScale(8),
-    marginBottom: verticalScale(8),
   },
   filterButton: {
-    paddingHorizontal: moderateScale(12),
+    backgroundColor: '#1A1A1A',
+    paddingHorizontal: moderateScale(16),
     paddingVertical: verticalScale(8),
-    borderRadius: moderateScale(8),
-    backgroundColor: '#000000',
+    borderRadius: moderateScale(20),
     borderWidth: 1,
     borderColor: '#404040',
   },
@@ -514,147 +537,213 @@ const styles = StyleSheet.create({
     borderColor: '#E50914',
   },
   filterButtonText: {
-    color: '#8C8C8C',
-    fontSize: moderateScale(12),
-    fontWeight: 'bold',
-  },
-  filterButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  productsContainer: {
-    marginBottom: verticalScale(20),
-  },
-  productsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(16),
-  },
-  productsTitle: {
-    fontSize: moderateScale(18),
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  createButton: {
-    backgroundColor: '#E50914',
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(8),
-    borderRadius: moderateScale(8),
-  },
-  createButtonText: {
     color: '#FFFFFF',
     fontSize: moderateScale(14),
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
-  emptyContainer: {
-    alignItems: 'center',
-    padding: moderateScale(40),
+  statsSection: {
+    marginBottom: verticalScale(20),
   },
-  emptyIcon: {
-    fontSize: moderateScale(64),
-    marginBottom: verticalScale(16),
+  statsGrid: {
+    gap: verticalScale(12),
   },
-  emptyText: {
-    color: '#8C8C8C',
-    fontSize: moderateScale(16),
-  },
-  productCard: {
+  statCard: {
+    flexDirection: 'row',
     backgroundColor: '#1A1A1A',
     padding: moderateScale(16),
     borderRadius: moderateScale(12),
+    borderLeftWidth: 4,
+  },
+  statIcon: {
+    fontSize: moderateScale(32),
+    marginRight: moderateScale(16),
+  },
+  statContent: {
+    flex: 1,
+  },
+  statTitle: {
+    fontSize: moderateScale(14),
+    color: '#8C8C8C',
+    marginBottom: verticalScale(4),
+  },
+  statValue: {
+    fontSize: moderateScale(20),
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  statSubtitle: {
+    fontSize: moderateScale(12),
+    color: '#4CAF50',
+    marginTop: verticalScale(4),
+  },
+  productsSection: {
+    marginBottom: verticalScale(20),
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(12),
+  },
+  refreshButton: {
+    padding: moderateScale(4),
+  },
+  productCard: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
     marginBottom: verticalScale(12),
   },
   productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(8),
+    alignItems: 'flex-start',
+    marginBottom: verticalScale(12),
+  },
+  productInfo: {
+    flex: 1,
   },
   productName: {
     fontSize: moderateScale(18),
     fontWeight: 'bold',
     color: '#FFFFFF',
-    flex: 1,
+    marginBottom: verticalScale(4),
   },
-  activeBadge: {
-    paddingHorizontal: moderateScale(10),
-    paddingVertical: verticalScale(4),
-    borderRadius: moderateScale(6),
-  },
-  activeBadgeText: {
-    color: '#FFFFFF',
-    fontSize: moderateScale(11),
-    fontWeight: 'bold',
-  },
-  productDescription: {
-    fontSize: moderateScale(14),
-    color: '#8C8C8C',
-    marginBottom: verticalScale(8),
-  },
-  productInfo: {
-    marginBottom: verticalScale(12),
-  },
-  productInfoText: {
-    fontSize: moderateScale(12),
-    color: '#8C8C8C',
-  },
-  pricesRow: {
+  productMeta: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: verticalScale(12),
-    paddingVertical: verticalScale(8),
-    backgroundColor: '#000000',
-    borderRadius: moderateScale(8),
-  },
-  priceItem: {
     alignItems: 'center',
   },
-  priceLabel: {
+  productCategory: {
+    fontSize: moderateScale(14),
+    color: '#E50914',
+    fontWeight: '500',
+  },
+  productType: {
+    fontSize: moderateScale(14),
+    color: '#8C8C8C',
+    marginLeft: moderateScale(4),
+  },
+  statusBadge: {
+    paddingHorizontal: moderateScale(8),
+    paddingVertical: verticalScale(4),
+    borderRadius: moderateScale(12),
+  },
+  statusText: {
+    color: '#FFFFFF',
     fontSize: moderateScale(12),
+    fontWeight: '600',
+  },
+  productDetails: {
+    marginBottom: verticalScale(12),
+  },
+  stockSection: {
+    marginBottom: verticalScale(8),
+  },
+  stockText: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+  },
+  stockZero: {
+    color: '#EF4444',
+  },
+  stockLow: {
+    color: '#F59E0B',
+  },
+  stockNormal: {
+    color: '#10B981',
+  },
+  pricesSection: {
+    
+  },
+  pricesTitle: {
+    fontSize: moderateScale(14),
     color: '#8C8C8C',
     marginBottom: verticalScale(4),
   },
-  priceValue: {
-    fontSize: moderateScale(14),
-    fontWeight: 'bold',
-    color: '#4CAF50',
+  pricesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: moderateScale(8),
   },
-  stockRow: {
+  price: {
+    fontSize: moderateScale(14),
+    color: '#10B981',
+    fontWeight: '500',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: moderateScale(8),
+  },
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(12),
-  },
-  stockBadge: {
     paddingHorizontal: moderateScale(12),
     paddingVertical: verticalScale(6),
     borderRadius: moderateScale(6),
+    flex: 1,
+    justifyContent: 'center',
   },
-  stockText: {
-    color: '#FFFFFF',
-    fontSize: moderateScale(13),
-    fontWeight: 'bold',
+  editButton: {
+    backgroundColor: '#3B82F6',
   },
-  adjustButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(6),
-    borderRadius: moderateScale(6),
+  activateButton: {
+    backgroundColor: '#10B981',
   },
-  adjustButtonText: {
+  deactivateButton: {
+    backgroundColor: '#F59E0B',
+  },
+  deleteButton: {
+    backgroundColor: '#EF4444',
+  },
+  actionText: {
     color: '#FFFFFF',
     fontSize: moderateScale(12),
-    fontWeight: 'bold',
+    fontWeight: '600',
+    marginLeft: moderateScale(4),
   },
-  detailButton: {
-    backgroundColor: '#404040',
-    padding: verticalScale(10),
-    borderRadius: moderateScale(8),
+  emptyState: {
     alignItems: 'center',
+    padding: verticalScale(48),
+    backgroundColor: '#1A1A1A',
+    borderRadius: moderateScale(12),
   },
-  detailButtonText: {
+  emptyTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginTop: verticalScale(16),
+    marginBottom: verticalScale(8),
+  },
+  emptyDescription: {
+    fontSize: moderateScale(14),
+    color: '#8C8C8C',
+    textAlign: 'center',
+    marginBottom: verticalScale(20),
+  },
+  emptyActionButton: {
+    backgroundColor: '#E50914',
+    paddingHorizontal: moderateScale(24),
+    paddingVertical: verticalScale(12),
+    borderRadius: moderateScale(8),
+  },
+  emptyActionText: {
     color: '#FFFFFF',
     fontSize: moderateScale(14),
     fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#E50914',
+    padding: verticalScale(16),
+    borderRadius: moderateScale(8),
+    alignItems: 'center',
+    marginTop: verticalScale(20),
+  },
+  logoutButtonText: {
+    fontSize: moderateScale(16),
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  bottomSpacer: {
+    height: verticalScale(40),
   },
 });

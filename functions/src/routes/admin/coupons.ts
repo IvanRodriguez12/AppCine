@@ -1,15 +1,10 @@
-/**
- * routes/admin/coupons.ts
- * Rutas de administración para gestión de cupones
- */
-
+// functions/src/routes/admin/coupons.ts
 import * as admin from 'firebase-admin';
 import { Router } from 'express';
 import { verifyToken, requireAdmin, AuthRequest } from '../../middleware/auth';
 import { asyncHandler, ApiError } from '../../middleware/errorHandler';
 import { db } from '../../config/firebase';
 import { Coupon, CouponScope, CouponMode } from '../../models/coupon';
-
 
 const router = Router();
 
@@ -40,7 +35,7 @@ interface EstadisticasCupones {
   porModo: Record<CouponMode, number>;
   premiumOnly: number;
   expirados: number;
-  proximosAExpirar: number; // Próximos 7 días
+  proximosAExpirar: number;
 }
 
 /**
@@ -306,21 +301,24 @@ router.post('/', asyncHandler(async (req: AuthRequest, res: any) => {
     }
   }
 
-  const newCoupon: Omit<Coupon, 'id'> = {
+  // 🔧 CORRECCIÓN: Remover campos undefined antes de guardar en Firestore
+  const newCoupon: any = {
     code: upperCode,
     scope,
     mode,
-    value: value || undefined,
-    buyQuantity: buyQuantity || undefined,
-    payQuantity: payQuantity || undefined,
     premiumOnly: premiumOnly ?? false,
-    minAmount: minAmount || undefined,
-    maxDiscount: maxDiscount || undefined,
     active: true,
-    createdAt: admin.firestore.FieldValue.serverTimestamp() as any,
-    validFrom: validFrom ? new Date(validFrom) as any : undefined,
-    validTo: validTo ? new Date(validTo) as any : undefined
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+
+  // 🔧 SOLUCIÓN: Solo agregar campos que tengan valor (no undefined)
+  if (value !== undefined && value !== null) newCoupon.value = value;
+  if (buyQuantity !== undefined && buyQuantity !== null) newCoupon.buyQuantity = buyQuantity;
+  if (payQuantity !== undefined && payQuantity !== null) newCoupon.payQuantity = payQuantity;
+  if (minAmount !== undefined && minAmount !== null) newCoupon.minAmount = minAmount;
+  if (maxDiscount !== undefined && maxDiscount !== null) newCoupon.maxDiscount = maxDiscount;
+  if (validFrom) newCoupon.validFrom = admin.firestore.Timestamp.fromDate(new Date(validFrom));
+  if (validTo) newCoupon.validTo = admin.firestore.Timestamp.fromDate(new Date(validTo));
 
   const docRef = await db.collection('coupons').add(newCoupon);
 
@@ -336,16 +334,6 @@ router.post('/', asyncHandler(async (req: AuthRequest, res: any) => {
 /**
  * POST /admin/coupons/bulk
  * Crear múltiples cupones con prefijo + número secuencial
- * 
- * Body:
- * {
- *   "prefix": "SUMMER",
- *   "quantity": 100,
- *   "scope": "tickets",
- *   "mode": "percent",
- *   "value": 20,
- *   ...resto de campos del cupón
- * }
  */
 router.post('/bulk', asyncHandler(async (req: AuthRequest, res: any) => {
   const {
@@ -384,23 +372,26 @@ router.post('/bulk', asyncHandler(async (req: AuthRequest, res: any) => {
   const createdCodes: string[] = [];
 
   for (let i = 1; i <= quantity; i++) {
-    const code = `${upperPrefix}${String(i).padStart(4, '0')}`; // ej: SUMMER0001
+    const code = `${upperPrefix}${String(i).padStart(4, '0')}`;
     
-    const newCoupon: Omit<Coupon, 'id'> = {
+    // 🔧 CORRECCIÓN: Remover campos undefined
+    const newCoupon: any = {
       code,
       scope,
       mode,
-      value: value || undefined,
-      buyQuantity: buyQuantity || undefined,
-      payQuantity: payQuantity || undefined,
       premiumOnly: premiumOnly ?? false,
-      minAmount: minAmount || undefined,
-      maxDiscount: maxDiscount || undefined,
       active: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp() as any,
-      validFrom: validFrom ? new Date(validFrom) as any : undefined,
-      validTo: validTo ? new Date(validTo) as any : undefined
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
+
+    // 🔧 SOLUCIÓN: Solo agregar campos que tengan valor
+    if (value !== undefined && value !== null) newCoupon.value = value;
+    if (buyQuantity !== undefined && buyQuantity !== null) newCoupon.buyQuantity = buyQuantity;
+    if (payQuantity !== undefined && payQuantity !== null) newCoupon.payQuantity = payQuantity;
+    if (minAmount !== undefined && minAmount !== null) newCoupon.minAmount = minAmount;
+    if (maxDiscount !== undefined && maxDiscount !== null) newCoupon.maxDiscount = maxDiscount;
+    if (validFrom) newCoupon.validFrom = admin.firestore.Timestamp.fromDate(new Date(validFrom));
+    if (validTo) newCoupon.validTo = admin.firestore.Timestamp.fromDate(new Date(validTo));
 
     const docRef = db.collection('coupons').doc();
     batch.set(docRef, newCoupon);
@@ -451,7 +442,7 @@ router.put('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
     throw new ApiError(400, 'El valor de porcentaje debe estar entre 0 y 100');
   }
 
-  // Preparar updates
+  // 🔧 CORRECCIÓN: Remover campos undefined de los updates
   const validUpdates: any = {};
 
   const allowedFields = [
@@ -461,9 +452,9 @@ router.put('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
   ];
 
   allowedFields.forEach(field => {
-    if (field in updates) {
+    if (field in updates && updates[field] !== undefined && updates[field] !== null) {
       if (field === 'validFrom' || field === 'validTo') {
-        validUpdates[field] = updates[field] ? new Date(updates[field]) : null;
+        validUpdates[field] = updates[field] ? admin.firestore.Timestamp.fromDate(new Date(updates[field])) : null;
       } else {
         validUpdates[field] = updates[field];
       }
@@ -555,9 +546,6 @@ router.delete('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
 /**
  * GET /admin/coupons/:id/usage
  * Ver historial de uso de un cupón (requiere implementar tracking)
- * 
- * NOTA: Esta funcionalidad requiere que guardes el uso de cupones en otra colección
- * Por ejemplo: couponUsage/{usageId} = { couponId, userId, orderId, timestamp, ... }
  */
 router.get('/:id/usage', asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
@@ -569,7 +557,6 @@ router.get('/:id/usage', asyncHandler(async (req: AuthRequest, res: any) => {
   }
 
   // TODO: Implementar tracking de uso en otra colección
-  // Por ahora retornamos mensaje informativo
   res.json({
     message: 'Historial de uso del cupón',
     couponId: id,

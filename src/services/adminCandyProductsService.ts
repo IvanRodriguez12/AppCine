@@ -13,9 +13,8 @@ export type CandyTamanio = 'chico' | 'mediano' | 'grande';
 export interface CandyProduct {
   id: string;
   nombre: string;
-  descripcion: string;
-  categoria: CandyCategoria;
   tipo: CandyTipo;
+  categoria: CandyCategoria;
   precios: {
     chico: number;
     mediano: number;
@@ -23,8 +22,7 @@ export interface CandyProduct {
   };
   stock: number;
   activo: boolean;
-  imagen?: string;
-  imageKey?: string;
+  imageKey: string;
   creadoEn: string | Date;
   actualizadoEn: string | Date;
 }
@@ -80,8 +78,122 @@ export interface BulkStockItem {
   stock: number;
 }
 
+export interface CrearProductoData {
+  nombre: string;
+  tipo: CandyTipo;
+  categoria: CandyCategoria;
+  precios: {
+    chico: number;
+    mediano: number;
+    grande: number;
+  };
+  stock?: number;
+  activo?: boolean;
+  imageKey?: string;
+}
+
+export interface ActualizarProductoData {
+  nombre?: string;
+  tipo?: CandyTipo;
+  categoria?: CandyCategoria;
+  precios?: {
+    chico: number;
+    mediano: number;
+    grande: number;
+  };
+  stock?: number;
+  activo?: boolean;
+  imageKey?: string;
+}
+
 class AdminCandyProductsService {
   private baseUrl = '/admin/candy-products';
+
+  /**
+   * POST /admin/candy-products
+   * Crear nuevo producto
+   */
+  async crearProducto(productoData: CrearProductoData): Promise<
+    ApiResponse<{
+      message?: string;
+      productId: string;
+      producto: CandyProduct;
+    }>
+  > {
+    try {
+      console.log('🆕 [AdminCandyProductsService] Creando nuevo producto:', productoData);
+
+      const response = await apiClient.post(this.baseUrl, productoData);
+
+      return {
+        success: true,
+        data: {
+          message: response.data.message,
+          productId: response.data.productId,
+          producto: response.data.producto
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ [AdminCandyProductsService] Error creando producto:', error);
+      return handleApiError(error);
+    }
+  }
+
+  /**
+   * GET /admin/candy-products/:id
+   * Obtener producto específico
+   */
+  async getProducto(id: string): Promise<ApiResponse<{ producto: CandyProduct; message?: string }>> {
+    try {
+      console.log(`🔍 [AdminCandyProductsService] Obteniendo producto: ${id}`);
+
+      const response = await apiClient.get(`${this.baseUrl}/${id}`);
+
+      return {
+        success: true,
+        data: {
+          producto: response.data.producto,
+          message: response.data.message
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ [AdminCandyProductsService] Error obteniendo producto:', error);
+      return handleApiError(error);
+    }
+  }
+
+  /**
+   * PUT /admin/candy-products/:id
+   * Actualizar producto completo
+   */
+  async actualizarProducto(
+    id: string,
+    productoData: ActualizarProductoData
+  ): Promise<
+    ApiResponse<{
+      message?: string;
+      productId: string;
+      cambios: string[];
+    }>
+  > {
+    try {
+      console.log(`✏️ [AdminCandyProductsService] Actualizando producto ${id}:`, productoData);
+
+      const response = await apiClient.put(`${this.baseUrl}/${id}`, productoData);
+
+      return {
+        success: true,
+        data: {
+          message: response.data.message,
+          productId: response.data.productId,
+          cambios: response.data.cambios
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ [AdminCandyProductsService] Error actualizando producto:', error);
+      return handleApiError(error);
+    }
+  }
 
   /**
    * GET /admin/candy-products
@@ -114,7 +226,6 @@ class AdminCandyProductsService {
       
       console.log('✅ [AdminCandyProductsService] Response completo:', JSON.stringify(response.data, null, 2));
 
-      // El backend retorna: { message, count, productos }
       return {
         success: true,
         data: {
@@ -141,7 +252,6 @@ class AdminCandyProductsService {
       
       console.log('✅ [AdminCandyProductsService] Stats recibidas:', JSON.stringify(response.data, null, 2));
 
-      // El backend retorna: { message, data: { total, activos, ... } }
       return {
         success: true,
         data: {
@@ -181,45 +291,6 @@ class AdminCandyProductsService {
       };
     } catch (error: any) {
       console.error('❌ [AdminCandyProductsService] Error obteniendo bajo stock:', error);
-      return handleApiError(error);
-    }
-  }
-
-  /**
-   * Obtener detalle de un producto específico
-   * Como el backend no tiene endpoint /admin/candy-products/:id,
-   * obtenemos todos y filtramos por ID
-   */
-  async getProducto(id: string): Promise<ApiResponse<CandyProduct>> {
-    try {
-      console.log(`🔍 [AdminCandyProductsService] Buscando producto: ${id}`);
-
-      const result = await this.getProductos();
-
-      if (result.success && result.data) {
-        const producto = result.data.productos.find((p) => p.id === id);
-        
-        if (producto) {
-          console.log('✅ [AdminCandyProductsService] Producto encontrado:', producto.nombre);
-          return { 
-            success: true, 
-            data: producto 
-          };
-        } else {
-          console.warn('⚠️ [AdminCandyProductsService] Producto no encontrado');
-          return { 
-            success: false, 
-            error: 'Producto no encontrado' 
-          };
-        }
-      }
-
-      return { 
-        success: false, 
-        error: result.error || 'Error al buscar producto' 
-      };
-    } catch (error: any) {
-      console.error('❌ [AdminCandyProductsService] Error buscando producto:', error);
       return handleApiError(error);
     }
   }

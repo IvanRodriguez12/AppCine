@@ -16,6 +16,141 @@ router.use(verifyToken);
 router.use(requireAdmin);
 
 /**
+ * POST /admin/candy-products
+ * Crear nuevo producto
+ */
+router.post('/', asyncHandler(async (req: AuthRequest, res: any) => {
+  const {
+    nombre,
+    tipo,
+    categoria,
+    precios,
+    stock = 0,
+    activo = true,
+    imageKey = ''
+  } = req.body;
+
+  // Validaciones
+  if (!nombre || !tipo || !categoria || !precios) {
+    throw new ApiError(400, 'Faltan campos requeridos: nombre, tipo, categoria, precios');
+  }
+
+  if (typeof stock !== 'number' || stock < 0) {
+    throw new ApiError(400, 'Stock debe ser un número >= 0');
+  }
+
+  // Validar estructura de precios
+  if (typeof precios !== 'object' || !precios.chico || !precios.mediano || !precios.grande) {
+    throw new ApiError(400, 'Precios debe tener estructura: { chico: number, mediano: number, grande: number }');
+  }
+
+  const nuevoProducto: Partial<CandyProduct> = {
+    nombre: nombre.trim(),
+    tipo,
+    categoria,
+    precios,
+    stock,
+    activo,
+    imageKey,
+    creadoEn: new Date(),
+    actualizadoEn: new Date()
+  };
+
+  const docRef = await db.collection('candyProducts').add(nuevoProducto);
+
+  console.log(`🆕 Producto creado por admin ${req.user?.uid}: ${nombre}`);
+
+  res.status(201).json({
+    message: 'Producto creado exitosamente',
+    productId: docRef.id,
+    producto: {
+      ...nuevoProducto,
+      id: docRef.id
+    }
+  });
+}));
+
+/**
+ * GET /admin/candy-products/:id
+ * Obtener producto específico
+ */
+router.get('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+
+  const productSnap = await db.collection('candyProducts').doc(id).get();
+
+  if (!productSnap.exists) {
+    throw new ApiError(404, 'Producto no encontrado');
+  }
+
+  const producto = {
+    id: productSnap.id,
+    ...productSnap.data()
+  } as CandyProduct;
+
+  res.json({
+    message: 'Producto obtenido exitosamente',
+    producto
+  });
+}));
+
+/**
+ * PUT /admin/candy-products/:id
+ * Actualizar producto completo
+ */
+router.put('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+  const {
+    nombre,
+    tipo,
+    categoria,
+    precios,
+    stock,
+    activo,
+    imageKey
+  } = req.body;
+
+  const productRef = db.collection('candyProducts').doc(id);
+  const productSnap = await productRef.get();
+
+  if (!productSnap.exists) {
+    throw new ApiError(404, 'Producto no encontrado');
+  }
+
+  const updateData: any = {
+    actualizadoEn: new Date()
+  };
+
+  if (nombre !== undefined) updateData.nombre = nombre.trim();
+  if (tipo !== undefined) updateData.tipo = tipo;
+  if (categoria !== undefined) updateData.categoria = categoria;
+  if (precios !== undefined) {
+    if (typeof precios !== 'object' || !precios.chico || !precios.mediano || !precios.grande) {
+      throw new ApiError(400, 'Precios debe tener estructura: { chico: number, mediano: number, grande: number }');
+    }
+    updateData.precios = precios;
+  }
+  if (stock !== undefined) {
+    if (typeof stock !== 'number' || stock < 0) {
+      throw new ApiError(400, 'Stock debe ser un número >= 0');
+    }
+    updateData.stock = stock;
+  }
+  if (activo !== undefined) updateData.activo = activo;
+  if (imageKey !== undefined) updateData.imageKey = imageKey;
+
+  await productRef.update(updateData);
+
+  console.log(`✏️ Producto actualizado por admin ${req.user?.uid}: ${id}`);
+
+  res.json({
+    message: 'Producto actualizado exitosamente',
+    productId: id,
+    cambios: Object.keys(updateData).filter(key => key !== 'actualizadoEn')
+  });
+}));
+
+/**
  * GET /admin/candy-products
  * Lista TODOS los productos (activos e inactivos)
  */

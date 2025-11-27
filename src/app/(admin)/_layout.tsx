@@ -8,19 +8,15 @@ export default function AdminLayout() {
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    // ⛔ Si no es admin, redirigir
     if (!isLoading) {
       if (!user) {
-        console.log('⛔ No hay usuario - redirigiendo a login');
         router.replace('/(auth)/iniciarSesion');
       } else if (user.role !== 'admin') {
-        console.log('⛔ Usuario no es admin - redirigiendo a home');
         router.replace('/(tabs)/home');
       }
     }
   }, [user, isLoading]);
 
-  // Mostrar loading mientras verifica
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -30,7 +26,6 @@ export default function AdminLayout() {
     );
   }
 
-  // Si no es admin, no mostrar nada (se redirigirá)
   if (!user || user.role !== 'admin') {
     return (
       <View style={styles.loadingContainer}>
@@ -40,17 +35,12 @@ export default function AdminLayout() {
     );
   }
 
-  // Usuario es admin, mostrar layout
   return (
     <Stack
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#000000',
-        },
+        headerStyle: { backgroundColor: '#000000' },
         headerTintColor: '#FFFFFF',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
       <Stack.Screen 
@@ -60,42 +50,57 @@ export default function AdminLayout() {
           headerLeft: () => null, 
         }} 
       />
-      {/* 🆕 AGREGAR PANTALLAS DE USUARIOS */}
+      {/* CUPONES */}
+      <Stack.Screen 
+        name="cupones/index" 
+        options={{ title: '🏷️ Gestión de Cupones' }} 
+      />
+      <Stack.Screen 
+        name="cupones/crear" 
+        options={{ title: '➕ Crear Cupón' }} 
+      />
+      <Stack.Screen 
+        name="cupones/bulk" 
+        options={{ title: '🎯 Creación Masiva' }} 
+      />
+      <Stack.Screen 
+        name="cupones/[id]" 
+        options={{ title: '✏️ Editar Cupón' }} 
+      />
+      {/* USUARIOS */}
       <Stack.Screen 
         name="usuarios/index" 
-        options={{ 
-          title: '👥 Gestión de Usuarios',
-        }} 
+        options={{ title: '👥 Gestión de Usuarios' }} 
       />
       <Stack.Screen 
         name="usuarios/[id]" 
-        options={{ 
-          title: '👤 Detalles del Usuario',
-        }} 
+        options={{ title: '👤 Detalles del Usuario' }} 
       />
+      {/* CANDY ORDERS */}
       <Stack.Screen 
-        name="candyOrders/list" 
-        options={{ 
-          title: '🍿 Pedidos de Golosinas',
-        }} 
+        name="candyOrders/index" 
+        options={{ title: '🍿 Pedidos de Golosinas' }} 
       />
       <Stack.Screen 
         name="candyOrders/[id]" 
-        options={{ 
-          title: '📦 Detalle del Pedido',
-        }} 
+        options={{ title: '📦 Detalle del Pedido' }} 
       />
+      {/* CANDY PRODUCTS */}
       <Stack.Screen 
-        name="candyProducts/list" 
-        options={{ 
-          title: '🍬 Productos - Golosinas',
-        }} 
+        name="candyProducts/index" 
+        options={{ title: '🍬 Productos - Golosinas' }} 
       />
       <Stack.Screen 
         name="candyProducts/[id]" 
-        options={{ 
-          title: '📦 Detalles del Producto',
-        }} 
+        options={{ title: '📦 Detalles del Producto' }} 
+      />
+      <Stack.Screen 
+        name="candyProducts/crear" 
+        options={{ title: '➕ Crear Producto' }} 
+      />
+      <Stack.Screen 
+        name="candyProducts/stock" 
+        options={{ title: '📊 Gestión de Stock' }} 
       />
     </Stack>
   );

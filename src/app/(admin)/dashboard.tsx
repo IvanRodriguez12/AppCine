@@ -169,7 +169,12 @@ export default function AdminDashboard() {
   const navigateToUsers = () => {
   console.log('👥 Navegando a Usuarios...');
   router.push('/(admin)/usuarios');
-};
+  };
+
+    const navigateToCoupons = () => {
+    console.log('🏷️ Navegando a Cupones...');
+    router.push('/(admin)/cupones');
+  };
 
   const formatCurrency = (value: number | undefined | null) => {
     if (value === undefined || value === null) return '$0';
@@ -452,6 +457,18 @@ export default function AdminDashboard() {
             <View style={styles.accessContent}>
               <Text style={styles.accessTitle}>Productos</Text>
               <Text style={styles.accessDescription}>Administrar catálogo</Text>
+            </View>
+            <Text style={styles.accessArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.accessCard}
+            onPress={navigateToCoupons}
+          >
+            <Text style={styles.accessIcon}>🏷️</Text>
+            <View style={styles.accessContent}>
+              <Text style={styles.accessTitle}>Cupones</Text>
+              <Text style={styles.accessDescription}>Gestionar códigos promocionales</Text>
             </View>
             <Text style={styles.accessArrow}>›</Text>
           </TouchableOpacity>

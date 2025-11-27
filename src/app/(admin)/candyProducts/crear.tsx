@@ -1,6 +1,6 @@
-// app/(admin)/candyProducts/[id].tsx
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+// app/(admin)/candyProducts/crear.tsx
+import { router } from 'expo-router';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -18,36 +18,24 @@ import { useAuth } from '@/context/authContext';
 import AdminCandyProductsService, { 
   CandyCategoria, 
   CandyTipo,
-  ActualizarProductoData,
-  CandyProduct 
+  CrearProductoData 
 } from '@/services/adminCandyProductsService';
 import { Ionicons } from '@expo/vector-icons';
 
 // Interfaz extendida para asegurar que stock sea number
-interface FormProductoData extends ActualizarProductoData {
+interface FormProductoData extends CrearProductoData {
   stock: number;
-  nombre: string;
-  tipo: CandyTipo;
-  categoria: CandyCategoria;
-  precios: {
-    chico: number;
-    mediano: number;
-    grande: number;
-  };
-  activo: boolean;
 }
 
-export default function EditarProductoScreen() {
+export default function CrearProductoScreen() {
   const { user } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingProduct, setIsLoadingProduct] = useState(true);
   
   // Estado del formulario con tipo extendido
   const [formData, setFormData] = useState<FormProductoData>({
     nombre: '',
-    tipo: 'comida',
-    categoria: 'comida',
+    tipo: 'comida' as CandyTipo,
+    categoria: 'comida' as CandyCategoria,
     precios: {
       chico: 0,
       mediano: 0,
@@ -58,7 +46,6 @@ export default function EditarProductoScreen() {
     imageKey: '',
   });
 
-  const [productoOriginal, setProductoOriginal] = useState<CandyProduct | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   // Opciones para los selects
@@ -74,48 +61,6 @@ export default function EditarProductoScreen() {
     { value: 'comida', label: 'Comida', icon: '🍿' },
     { value: 'otros', label: 'Otros', icon: '📦' },
   ];
-
-  // Cargar datos del producto al montar el componente
-  useEffect(() => {
-    if (id) {
-      loadProductData();
-    }
-  }, [id]);
-
-  const loadProductData = async () => {
-    try {
-      setIsLoadingProduct(true);
-      console.log(`🔍 Cargando datos del producto: ${id}`);
-      
-      const result = await AdminCandyProductsService.getProducto(id);
-      
-      if (result.success && result.data?.producto) {
-        const producto = result.data.producto;
-        setProductoOriginal(producto);
-        
-        // Llenar el formulario con los datos existentes
-        setFormData({
-          nombre: producto.nombre,
-          tipo: producto.tipo,
-          categoria: producto.categoria,
-          precios: producto.precios,
-          stock: producto.stock,
-          activo: producto.activo,
-          imageKey: producto.imageKey || '',
-        });
-        
-        console.log('✅ Datos del producto cargados:', producto.nombre);
-      } else {
-        throw new Error(result.error || 'No se pudo cargar el producto');
-      }
-    } catch (error: any) {
-      console.error('❌ Error cargando producto:', error);
-      Alert.alert('Error', 'No se pudo cargar el producto');
-      router.back();
-    } finally {
-      setIsLoadingProduct(false);
-    }
-  };
 
   const validateForm = (): boolean => {
     const newErrors: { [key: string]: string } = {};
@@ -144,21 +89,6 @@ export default function EditarProductoScreen() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const hasChanges = (): boolean => {
-    if (!productoOriginal) return false;
-
-    return (
-      formData.nombre !== productoOriginal.nombre ||
-      formData.tipo !== productoOriginal.tipo ||
-      formData.categoria !== productoOriginal.categoria ||
-      formData.precios.chico !== productoOriginal.precios.chico ||
-      formData.precios.mediano !== productoOriginal.precios.mediano ||
-      formData.precios.grande !== productoOriginal.precios.grande ||
-      formData.stock !== productoOriginal.stock ||
-      formData.activo !== productoOriginal.activo
-    );
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -201,33 +131,41 @@ export default function EditarProductoScreen() {
       return;
     }
 
-    if (!hasChanges()) {
-      Alert.alert('Sin cambios', 'No has realizado ningún cambio en el producto');
-      return;
-    }
-
     setIsLoading(true);
     try {
-      console.log('✏️ Actualizando producto:', id, formData);
+      console.log('🆕 Enviando datos del producto:', formData);
       
-      const result = await AdminCandyProductsService.actualizarProducto(id!, formData);
+      const result = await AdminCandyProductsService.crearProducto(formData);
       
       if (result.success) {
-        console.log('✅ Producto actualizado exitosamente:', result.data?.productId);
+        console.log('✅ Producto creado exitosamente:', result.data?.productId);
         
         Alert.alert(
           '¡Éxito!', 
-          `Producto "${formData.nombre}" actualizado correctamente`,
+          `Producto "${formData.nombre}" creado correctamente`,
           [
             {
               text: 'Ver Productos',
               onPress: () => router.replace('/(admin)/candyProducts'),
             },
             {
-              text: 'Seguir Editando',
+              text: 'Crear Otro',
               onPress: () => {
-                // Recargar datos actualizados
-                loadProductData();
+                // Resetear formulario
+                setFormData({
+                  nombre: '',
+                  tipo: 'comida',
+                  categoria: 'comida',
+                  precios: {
+                    chico: 0,
+                    mediano: 0,
+                    grande: 0,
+                  },
+                  stock: 0,
+                  activo: true,
+                  imageKey: '',
+                });
+                setErrors({});
               },
             },
           ]
@@ -236,10 +174,10 @@ export default function EditarProductoScreen() {
         throw new Error(result.error || 'Error desconocido');
       }
     } catch (error: any) {
-      console.error('❌ Error actualizando producto:', error);
+      console.error('❌ Error creando producto:', error);
       Alert.alert(
         'Error', 
-        error.message || 'No se pudo actualizar el producto. Intenta nuevamente.'
+        error.message || 'No se pudo crear el producto. Intenta nuevamente.'
       );
     } finally {
       setIsLoading(false);
@@ -247,7 +185,7 @@ export default function EditarProductoScreen() {
   };
 
   const handleGoBack = () => {
-    if (hasChanges()) {
+    if (formData.nombre || formData.precios.chico > 0) {
       Alert.alert(
         '¿Salir sin guardar?',
         'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?',
@@ -264,34 +202,6 @@ export default function EditarProductoScreen() {
       router.back();
     }
   };
-
-  const handleToggleActive = async () => {
-    try {
-      const result = await AdminCandyProductsService.cambiarEstadoActivo(
-        id!, 
-        !formData.activo
-      );
-      
-      if (result.success) {
-        setFormData(prev => ({ ...prev, activo: !prev.activo }));
-        Alert.alert(
-          'Éxito', 
-          `Producto ${!formData.activo ? 'activado' : 'desactivado'}`
-        );
-      }
-    } catch (error: any) {
-      Alert.alert('Error', 'No se pudo cambiar el estado del producto');
-    }
-  };
-
-  if (isLoadingProduct) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#E50914" />
-        <Text style={styles.loadingText}>Cargando producto...</Text>
-      </View>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -310,15 +220,10 @@ export default function EditarProductoScreen() {
               <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
             <View>
-              <Text style={styles.welcomeText}>Editar Producto</Text>
-              <Text style={styles.roleText}>✏️ {productoOriginal?.nombre || 'Cargando...'}</Text>
+              <Text style={styles.welcomeText}>Crear Producto</Text>
+              <Text style={styles.roleText}>🍬 Nuevo producto</Text>
             </View>
           </View>
-          {hasChanges() && (
-            <View style={styles.changesBadge}>
-              <Text style={styles.changesBadgeText}>📝 Sin guardar</Text>
-            </View>
-          )}
         </View>
 
         {/* Formulario */}
@@ -467,7 +372,7 @@ export default function EditarProductoScreen() {
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: moderateScale(8) }]}>
               <Text style={styles.inputLabel}>
-                📦 Stock {errors.stock && <Text style={styles.errorText}> • {errors.stock}</Text>}
+                📦 Stock Inicial {errors.stock && <Text style={styles.errorText}> • {errors.stock}</Text>}
               </Text>
               <TextInput
                 style={[
@@ -493,7 +398,7 @@ export default function EditarProductoScreen() {
                 </Text>
                 <Switch
                   value={formData.activo}
-                  onValueChange={handleToggleActive}
+                  onValueChange={(value) => handleInputChange('activo', value)}
                   trackColor={{ false: '#EF4444', true: '#10B981' }}
                   thumbColor="#FFFFFF"
                 />
@@ -510,33 +415,10 @@ export default function EditarProductoScreen() {
                 Funcionalidad de imagen próximamente
               </Text>
               <Text style={styles.imagePlaceholderSubtext}>
-                ImageKey actual: {formData.imageKey || 'No asignada'}
+                Por ahora el producto se creará sin imagen
               </Text>
             </View>
           </View>
-
-          {/* Información de auditoría */}
-          {productoOriginal && (
-            <View style={styles.auditInfo}>
-              <Text style={styles.auditTitle}>📊 Información del Producto</Text>
-              <View style={styles.auditRow}>
-                <Text style={styles.auditLabel}>ID:</Text>
-                <Text style={styles.auditValue}>{id}</Text>
-              </View>
-              <View style={styles.auditRow}>
-                <Text style={styles.auditLabel}>Creado:</Text>
-                <Text style={styles.auditValue}>
-                  {productoOriginal.creadoEn ? new Date(productoOriginal.creadoEn as any).toLocaleDateString() : 'N/A'}
-                </Text>
-              </View>
-              <View style={styles.auditRow}>
-                <Text style={styles.auditLabel}>Última actualización:</Text>
-                <Text style={styles.auditValue}>
-                  {productoOriginal.actualizadoEn ? new Date(productoOriginal.actualizadoEn as any).toLocaleDateString() : 'N/A'}
-                </Text>
-              </View>
-            </View>
-          )}
         </View>
 
         {/* Botones de acción */}
@@ -551,13 +433,9 @@ export default function EditarProductoScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[
-              styles.actionButton, 
-              styles.submitButton,
-              !hasChanges() && styles.submitButtonDisabled
-            ]}
+            style={[styles.actionButton, styles.submitButton]}
             onPress={handleSubmit}
-            disabled={isLoading || !hasChanges()}
+            disabled={isLoading}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -565,7 +443,7 @@ export default function EditarProductoScreen() {
               <Ionicons name="checkmark" size={20} color="#FFFFFF" />
             )}
             <Text style={styles.actionButtonText}>
-              {isLoading ? 'Guardando...' : 'Guardar Cambios'}
+              {isLoading ? 'Creando...' : 'Crear Producto'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -581,17 +459,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000000',
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    marginTop: 16,
-    fontSize: 16,
-  },
   scrollView: {
     flex: 1,
   },
@@ -602,7 +469,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: verticalScale(24),
   },
   headerLeft: {
@@ -623,17 +490,6 @@ const styles = StyleSheet.create({
   roleText: {
     fontSize: moderateScale(14),
     color: '#E50914',
-  },
-  changesBadge: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: moderateScale(8),
-    paddingVertical: verticalScale(4),
-    borderRadius: moderateScale(12),
-  },
-  changesBadgeText: {
-    color: '#000000',
-    fontSize: moderateScale(12),
-    fontWeight: 'bold',
   },
   formSection: {
     marginBottom: verticalScale(24),
@@ -777,34 +633,6 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(4),
     textAlign: 'center',
   },
-  auditInfo: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: moderateScale(12),
-    padding: moderateScale(16),
-    marginTop: verticalScale(16),
-  },
-  auditTitle: {
-    fontSize: moderateScale(16),
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: verticalScale(12),
-  },
-  auditRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(8),
-  },
-  auditLabel: {
-    fontSize: moderateScale(14),
-    color: '#8C8C8C',
-    fontWeight: '500',
-  },
-  auditValue: {
-    fontSize: moderateScale(14),
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
   actionsSection: {
     flexDirection: 'row',
     gap: moderateScale(12),
@@ -824,10 +652,6 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: '#E50914',
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#404040',
-    opacity: 0.6,
   },
   actionButtonText: {
     color: '#FFFFFF',
