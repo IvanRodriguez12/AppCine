@@ -71,86 +71,6 @@ router.post('/', asyncHandler(async (req: AuthRequest, res: any) => {
 }));
 
 /**
- * GET /admin/candy-products/:id
- * Obtener producto específico
- */
-router.get('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-
-  const productSnap = await db.collection('candyProducts').doc(id).get();
-
-  if (!productSnap.exists) {
-    throw new ApiError(404, 'Producto no encontrado');
-  }
-
-  const producto = {
-    id: productSnap.id,
-    ...productSnap.data()
-  } as CandyProduct;
-
-  res.json({
-    message: 'Producto obtenido exitosamente',
-    producto
-  });
-}));
-
-/**
- * PUT /admin/candy-products/:id
- * Actualizar producto completo
- */
-router.put('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-  const {
-    nombre,
-    tipo,
-    categoria,
-    precios,
-    stock,
-    activo,
-    imageKey
-  } = req.body;
-
-  const productRef = db.collection('candyProducts').doc(id);
-  const productSnap = await productRef.get();
-
-  if (!productSnap.exists) {
-    throw new ApiError(404, 'Producto no encontrado');
-  }
-
-  const updateData: any = {
-    actualizadoEn: new Date()
-  };
-
-  if (nombre !== undefined) updateData.nombre = nombre.trim();
-  if (tipo !== undefined) updateData.tipo = tipo;
-  if (categoria !== undefined) updateData.categoria = categoria;
-  if (precios !== undefined) {
-    if (typeof precios !== 'object' || !precios.chico || !precios.mediano || !precios.grande) {
-      throw new ApiError(400, 'Precios debe tener estructura: { chico: number, mediano: number, grande: number }');
-    }
-    updateData.precios = precios;
-  }
-  if (stock !== undefined) {
-    if (typeof stock !== 'number' || stock < 0) {
-      throw new ApiError(400, 'Stock debe ser un número >= 0');
-    }
-    updateData.stock = stock;
-  }
-  if (activo !== undefined) updateData.activo = activo;
-  if (imageKey !== undefined) updateData.imageKey = imageKey;
-
-  await productRef.update(updateData);
-
-  console.log(`✏️ Producto actualizado por admin ${req.user?.uid}: ${id}`);
-
-  res.json({
-    message: 'Producto actualizado exitosamente',
-    productId: id,
-    cambios: Object.keys(updateData).filter(key => key !== 'actualizadoEn')
-  });
-}));
-
-/**
  * GET /admin/candy-products
  * Lista TODOS los productos (activos e inactivos)
  */
@@ -261,6 +181,200 @@ router.get('/bajo-stock', asyncHandler(async (req: AuthRequest, res: any) => {
 }));
 
 /**
+ * GET /admin/candy-products/:id
+ * Obtener producto específico
+ */
+router.get('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+
+  const productSnap = await db.collection('candyProducts').doc(id).get();
+
+  if (!productSnap.exists) {
+    throw new ApiError(404, 'Producto no encontrado');
+  }
+
+  const producto = {
+    id: productSnap.id,
+    ...productSnap.data()
+  } as CandyProduct;
+
+  res.json({
+    message: 'Producto obtenido exitosamente',
+    producto
+  });
+}));
+
+/**
+ * PUT /admin/candy-products/:id
+ * Actualizar producto completo
+ */
+router.put('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+  const {
+    nombre,
+    tipo,
+    categoria,
+    precios,
+    stock,
+    activo,
+    imageKey
+  } = req.body;
+
+  const productRef = db.collection('candyProducts').doc(id);
+  const productSnap = await productRef.get();
+
+  if (!productSnap.exists) {
+    throw new ApiError(404, 'Producto no encontrado');
+  }
+
+  const updateData: any = {
+    actualizadoEn: new Date()
+  };
+
+  if (nombre !== undefined) updateData.nombre = nombre.trim();
+  if (tipo !== undefined) updateData.tipo = tipo;
+  if (categoria !== undefined) updateData.categoria = categoria;
+  if (precios !== undefined) {
+    if (typeof precios !== 'object' || !precios.chico || !precios.mediano || !precios.grande) {
+      throw new ApiError(400, 'Precios debe tener estructura: { chico: number, mediano: number, grande: number }');
+    }
+    updateData.precios = precios;
+  }
+  if (stock !== undefined) {
+    if (typeof stock !== 'number' || stock < 0) {
+      throw new ApiError(400, 'Stock debe ser un número >= 0');
+    }
+    updateData.stock = stock;
+  }
+  if (activo !== undefined) updateData.activo = activo;
+  if (imageKey !== undefined) updateData.imageKey = imageKey;
+
+  await productRef.update(updateData);
+
+  console.log(`✏️ Producto actualizado por admin ${req.user?.uid}: ${id}`);
+
+  res.json({
+    message: 'Producto actualizado exitosamente',
+    productId: id,
+    cambios: Object.keys(updateData).filter(key => key !== 'actualizadoEn')
+  });
+}));
+
+/**
+ * POST /admin/candy-products/bulk-stock
+ * Ajustar stock de múltiples productos a la vez
+ */
+router.post('/bulk-stock', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { productos, razon } = req.body;
+
+  if (!Array.isArray(productos) || productos.length === 0) {
+    throw new ApiError(400, 'Debe enviar un array de productos con { id, stock }');
+  }
+
+  const batch = db.batch();
+  const resultados = [];
+
+  for (const item of productos) {
+    if (!item.id || typeof item.stock !== 'number' || item.stock < 0) {
+      throw new ApiError(400, `Datos inválidos para producto: ${JSON.stringify(item)}`);
+    }
+
+    const productRef = db.collection('candyProducts').doc(item.id);
+    const productSnap = await productRef.get();
+
+    if (!productSnap.exists) {
+      throw new ApiError(404, `Producto no encontrado: ${item.id}`);
+    }
+
+    const producto = productSnap.data() as CandyProduct;
+    const stockAnterior = producto.stock;
+
+    // Actualizar en batch
+    batch.update(productRef, {
+      stock: item.stock,
+      actualizadoEn: new Date()
+    });
+
+    // Registrar auditoría
+    const auditRef = db.collection('candyStockAudit').doc();
+    batch.set(auditRef, {
+      productId: item.id,
+      productName: producto.nombre,
+      stockAnterior,
+      stockNuevo: item.stock,
+      diferencia: item.stock - stockAnterior,
+      razon: razon || 'Ajuste masivo por administrador',
+      adminId: req.user?.uid,
+      action: 'BULK_ADJUSTMENT',
+      updatedAt: new Date()
+    });
+
+    resultados.push({
+      id: item.id,
+      nombre: producto.nombre,
+      stockAnterior,
+      stockNuevo: item.stock,
+      diferencia: item.stock - stockAnterior
+    });
+  }
+
+  await batch.commit();
+
+  console.log(`📦 Stock masivo actualizado por admin ${req.user?.uid}: ${productos.length} productos`);
+
+  res.json({
+    message: 'Stock de múltiples productos actualizado exitosamente',
+    count: resultados.length,
+    resultados
+  });
+}));
+
+/**
+ * DELETE /admin/candy-products/:id/hard-delete
+ * Eliminar permanentemente un producto (use con precaución)
+ */
+router.delete('/:id/hard-delete', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+  const { confirmar } = req.body;
+
+  if (confirmar !== 'SI_ELIMINAR_PERMANENTEMENTE') {
+    throw new ApiError(400, 'Debe confirmar la eliminación permanente enviando: { "confirmar": "SI_ELIMINAR_PERMANENTEMENTE" }');
+  }
+
+  const productRef = db.collection('candyProducts').doc(id);
+  const productSnap = await productRef.get();
+
+  if (!productSnap.exists) {
+    throw new ApiError(404, 'Producto no encontrado');
+  }
+
+  const producto = productSnap.data() as CandyProduct;
+
+  // Verificar si el producto tiene órdenes asociadas
+  const ordenesSnapshot = await db
+    .collection('candyOrders')
+    .where('items', 'array-contains', { productId: id })
+    .limit(1)
+    .get();
+
+  if (!ordenesSnapshot.empty) {
+    throw new ApiError(400, 'No se puede eliminar un producto que tiene órdenes asociadas. Use desactivación en su lugar.');
+  }
+
+  // Eliminar producto
+  await productRef.delete();
+
+  console.log(`🗑️  Producto eliminado permanentemente por admin ${req.user?.uid}: ${producto.nombre} (${id})`);
+
+  res.json({
+    message: 'Producto eliminado permanentemente',
+    productId: id,
+    productName: producto.nombre,
+    warning: 'Esta acción no se puede deshacer'
+  });
+}));
+
+/**
  * PUT /admin/candy-products/:id/activate
  * Activar o desactivar un producto
  */
@@ -347,75 +461,6 @@ router.put('/:id/stock', asyncHandler(async (req: AuthRequest, res: any) => {
 }));
 
 /**
- * POST /admin/candy-products/bulk-stock
- * Ajustar stock de múltiples productos a la vez
- */
-router.post('/bulk-stock', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { productos, razon } = req.body;
-
-  if (!Array.isArray(productos) || productos.length === 0) {
-    throw new ApiError(400, 'Debe enviar un array de productos con { id, stock }');
-  }
-
-  const batch = db.batch();
-  const resultados = [];
-
-  for (const item of productos) {
-    if (!item.id || typeof item.stock !== 'number' || item.stock < 0) {
-      throw new ApiError(400, `Datos inválidos para producto: ${JSON.stringify(item)}`);
-    }
-
-    const productRef = db.collection('candyProducts').doc(item.id);
-    const productSnap = await productRef.get();
-
-    if (!productSnap.exists) {
-      throw new ApiError(404, `Producto no encontrado: ${item.id}`);
-    }
-
-    const producto = productSnap.data() as CandyProduct;
-    const stockAnterior = producto.stock;
-
-    // Actualizar en batch
-    batch.update(productRef, {
-      stock: item.stock,
-      actualizadoEn: new Date()
-    });
-
-    // Registrar auditoría
-    const auditRef = db.collection('candyStockAudit').doc();
-    batch.set(auditRef, {
-      productId: item.id,
-      productName: producto.nombre,
-      stockAnterior,
-      stockNuevo: item.stock,
-      diferencia: item.stock - stockAnterior,
-      razon: razon || 'Ajuste masivo por administrador',
-      adminId: req.user?.uid,
-      action: 'BULK_ADJUSTMENT',
-      updatedAt: new Date()
-    });
-
-    resultados.push({
-      id: item.id,
-      nombre: producto.nombre,
-      stockAnterior,
-      stockNuevo: item.stock,
-      diferencia: item.stock - stockAnterior
-    });
-  }
-
-  await batch.commit();
-
-  console.log(`📦 Stock masivo actualizado por admin ${req.user?.uid}: ${productos.length} productos`);
-
-  res.json({
-    message: 'Stock de múltiples productos actualizado exitosamente',
-    count: resultados.length,
-    resultados
-  });
-}));
-
-/**
  * GET /admin/candy-products/:id/audit
  * Historial de cambios de stock de un producto
  */
@@ -440,51 +485,6 @@ router.get('/:id/audit', asyncHandler(async (req: AuthRequest, res: any) => {
     productId: id,
     count: historial.length,
     historial
-  });
-}));
-
-/**
- * DELETE /admin/candy-products/:id/hard-delete
- * Eliminar permanentemente un producto (use con precaución)
- */
-router.delete('/:id/hard-delete', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-  const { confirmar } = req.body;
-
-  if (confirmar !== 'SI_ELIMINAR_PERMANENTEMENTE') {
-    throw new ApiError(400, 'Debe confirmar la eliminación permanente enviando: { "confirmar": "SI_ELIMINAR_PERMANENTEMENTE" }');
-  }
-
-  const productRef = db.collection('candyProducts').doc(id);
-  const productSnap = await productRef.get();
-
-  if (!productSnap.exists) {
-    throw new ApiError(404, 'Producto no encontrado');
-  }
-
-  const producto = productSnap.data() as CandyProduct;
-
-  // Verificar si el producto tiene órdenes asociadas
-  const ordenesSnapshot = await db
-    .collection('candyOrders')
-    .where('items', 'array-contains', { productId: id })
-    .limit(1)
-    .get();
-
-  if (!ordenesSnapshot.empty) {
-    throw new ApiError(400, 'No se puede eliminar un producto que tiene órdenes asociadas. Use desactivación en su lugar.');
-  }
-
-  // Eliminar producto
-  await productRef.delete();
-
-  console.log(`🗑️  Producto eliminado permanentemente por admin ${req.user?.uid}: ${producto.nombre} (${id})`);
-
-  res.json({
-    message: 'Producto eliminado permanentemente',
-    productId: id,
-    productName: producto.nombre,
-    warning: 'Esta acción no se puede deshacer'
   });
 }));
 
