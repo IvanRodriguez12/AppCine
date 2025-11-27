@@ -177,3 +177,41 @@ export const formatTopProductosForCSV = (productos: any[]) => {
     'Ingresos Totales': p.ingresos,
   }));
 };
+
+/**
+ * Formatea pedidos de golosinas para CSV
+ */
+export const formatCandyOrdersForCSV = (ordenes: any[]) => {
+  return ordenes.map(orden => ({
+    'ID': orden.id,
+    'Código de Canje': orden.redeemCode,
+    'Usuario ID': orden.userId,
+    'Estado Pago': orden.paymentStatus,
+    'Estado Canje': orden.redeemStatus,
+    'Método de Pago': orden.paymentMethod,
+    'Subtotal': orden.subtotal,
+    'Descuento': orden.descuento,
+    'Fee Servicio': orden.feeServicio,
+    'Total': orden.total,
+    'Fecha Creación': new Date(orden.createdAt).toLocaleString('es-AR'),
+    'Fecha Canje': orden.redeemedAt ? new Date(orden.redeemedAt).toLocaleString('es-AR') : 'No canjeado',
+    'Cantidad Items': orden.items?.length || 0,
+  }));
+};
+
+/**
+ * Formatea items de un pedido para CSV
+ */
+export const formatCandyOrderItemsForCSV = (orden: any) => {
+  if (!orden.items) return [];
+  
+  return orden.items.map((item: any) => ({
+    'Orden ID': orden.id,
+    'Código Canje': orden.redeemCode,
+    'Producto': item.nombre,
+    'Tamaño': item.tamanio,
+    'Precio Unitario': item.precioUnitario,
+    'Cantidad': item.cantidad,
+    'Subtotal': item.subtotal,
+  }));
+};

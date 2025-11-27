@@ -390,7 +390,7 @@ export default function AdminDashboard() {
 
           <TouchableOpacity
             style={styles.accessCard}
-            onPress={() => Alert.alert('Próximamente', 'FASE 4: Gestión de Pedidos')}
+            onPress={() => router.push('/(admin)/candyOrders/list')}
           >
             <Text style={styles.accessIcon}>🍿</Text>
             <View style={styles.accessContent}>

@@ -59,6 +59,18 @@ export default function AdminLayout() {
           headerLeft: () => null, // No permite volver atrás
         }} 
       />
+      <Stack.Screen 
+        name="candyOrders/index" 
+        options={{ 
+          title: '🍿 Pedidos de Golosinas',
+        }} 
+      />
+      <Stack.Screen 
+        name="candyOrders/[id]" 
+        options={{ 
+          title: '📦 Detalle del Pedido',
+        }} 
+      />
     </Stack>
   );
 }

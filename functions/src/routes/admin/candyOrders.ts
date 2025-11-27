@@ -24,8 +24,47 @@ router.use(verifyToken);
 router.use(requireAdmin);
 
 /**
+ * GET /admin/candy-orders/stats
+ * Estadísticas generales de órdenes
+ * ⚠️ DEBE IR ANTES DE /:id
+ */
+router.get('/stats', asyncHandler(async (req: AuthRequest, res: any) => {
+  const stats = await obtenerEstadisticasOrdenes();
+
+  res.json({
+    message: 'Estadísticas de órdenes',
+    data: stats
+  });
+}));
+
+/**
+ * GET /admin/candy-orders/search/:codigo
+ * Buscar orden por código de canje
+ * ⚠️ DEBE IR ANTES DE /:id
+ */
+router.get('/search/:codigo', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { codigo } = req.params;
+
+  if (!codigo || codigo.length < 6) {
+    throw new ApiError(400, 'Código de canje inválido (mínimo 6 caracteres)');
+  }
+
+  const orden = await buscarPorCodigoCanje(codigo);
+
+  if (!orden) {
+    throw new ApiError(404, 'Orden no encontrada con ese código');
+  }
+
+  res.json({
+    message: 'Orden encontrada',
+    orden
+  });
+}));
+
+/**
  * GET /admin/candy-orders
  * Listar todas las órdenes con filtros avanzados
+ * ⚠️ DEBE IR ANTES DE /:id
  */
 router.get('/', asyncHandler(async (req: AuthRequest, res: any) => {
   const {
@@ -93,44 +132,9 @@ router.get('/', asyncHandler(async (req: AuthRequest, res: any) => {
 }));
 
 /**
- * GET /admin/candy-orders/stats
- * Estadísticas generales de órdenes
- */
-router.get('/stats', asyncHandler(async (req: AuthRequest, res: any) => {
-  const stats = await obtenerEstadisticasOrdenes();
-
-  res.json({
-    message: 'Estadísticas de órdenes',
-    data: stats
-  });
-}));
-
-/**
- * GET /admin/candy-orders/search/:codigo
- * Buscar orden por código de canje
- */
-router.get('/search/:codigo', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { codigo } = req.params;
-
-  if (!codigo || codigo.length < 6) {
-    throw new ApiError(400, 'Código de canje inválido (mínimo 6 caracteres)');
-  }
-
-  const orden = await buscarPorCodigoCanje(codigo);
-
-  if (!orden) {
-    throw new ApiError(404, 'Orden no encontrada con ese código');
-  }
-
-  res.json({
-    message: 'Orden encontrada',
-    orden
-  });
-}));
-
-/**
  * GET /admin/candy-orders/:id
  * Ver detalles completos de una orden
+ * ⚠️ DEBE IR AL FINAL (captura todo lo que no matcheó antes)
  */
 router.get('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
