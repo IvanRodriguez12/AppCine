@@ -172,3 +172,24 @@ export async function reservarAsientos(
     return { ticketId: ticketRef.id };
   });
 }
+
+export const getOccupiedSeatsByShowtime = async (showtimeId: string): Promise<string[]> => {
+  // Tickets que bloquean asientos: confirmados o pendientes de pago
+  const estadosValidos = ['confirmado', 'pendiente'];
+
+  const snapshot = await db
+    .collection('tickets')
+    .where('showtimeId', '==', showtimeId)
+    .where('estado', 'in', estadosValidos)
+    .get();
+
+  const occupiedSet = new Set<string>();
+
+  snapshot.forEach((doc) => {
+    const data = doc.data() as Ticket;
+    const asientos = data.asientos || [];
+    asientos.forEach((a) => occupiedSet.add(a));
+  });
+
+  return Array.from(occupiedSet);
+};

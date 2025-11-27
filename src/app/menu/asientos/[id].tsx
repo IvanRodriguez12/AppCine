@@ -39,16 +39,30 @@ const Asientos = () => {
   // Cargar asientos ocupados desde el backend usando showtimeId
   useEffect(() => {
     const fetchShowtimeSeats = async () => {
-      const sId = Array.isArray(showtimeId) ? showtimeId[0] : showtimeId;
-      if (!sId) return;
+      // Tomamos showtimeId (si viene como array, agarramos el primero)
+      const sIdRaw = Array.isArray(showtimeId) ? showtimeId[0] : showtimeId;
+      const sId = sIdRaw || (Array.isArray(id) ? id[0] : id); // fallback a id por si acaso
+
+      if (!sId) {
+        console.warn('[Asientos] No hay showtimeId para cargar asientos ocupados');
+        return;
+      }
 
       try {
-        const response = await apiClient.get(`/showtimes/${sId}`);
-        const data = response.data as any;
+        // 👇 usamos el nuevo endpoint
+        const response = await apiClient.get(`/showtimes/${sId}/occupied-seats`);
+        const body = response.data as any;
+
         const occupied =
-          (data && (data.occupiedSeats || data.asientosOcupados)) || [];
+          body?.data?.occupiedSeats ||
+          body?.occupiedSeats ||
+          body?.asientosOcupados ||
+          [];
+
         if (Array.isArray(occupied)) {
           setAsientosOcupados(occupied);
+        } else {
+          console.warn('[Asientos] El backend no devolvió un array de asientos ocupados');
         }
       } catch (error) {
         console.error('Error al cargar asientos ocupados:', error);
@@ -56,7 +70,7 @@ const Asientos = () => {
     };
 
     fetchShowtimeSeats();
-  }, [showtimeId]);
+  }, [showtimeId, id]);
 
   const toggleSeleccion = (asiento: string) => {
     if (asientosOcupados.includes(asiento)) return;

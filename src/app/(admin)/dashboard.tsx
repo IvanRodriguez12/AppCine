@@ -1,20 +1,20 @@
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  Alert,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
 import { useAuth } from '@/context/authContext';
 import adminService, { DashboardMetrics } from '@/services/adminService';
 import { exportToCSV, formatDashboardMetricsForCSV, formatVentasPorDiaForCSV } from '@/utils/csvExport';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 interface StatCardProps {
   title: string;
@@ -166,14 +166,21 @@ export default function AdminDashboard() {
     console.log('🍬 Navegando a Productos...');
     router.push('/(admin)/candyProducts');
   };
+
   const navigateToUsers = () => {
   console.log('👥 Navegando a Usuarios...');
   router.push('/(admin)/usuarios');
+
   };
 
     const navigateToCoupons = () => {
     console.log('🏷️ Navegando a Cupones...');
     router.push('/(admin)/cupones');
+  };
+
+  const navigateToTickets = () => {
+    console.log('🎟️ Navegando a Tickets...');
+    router.push('/(admin)/tickets');
   };
 
   const formatCurrency = (value: number | undefined | null) => {
@@ -433,6 +440,18 @@ export default function AdminDashboard() {
             <View style={styles.accessContent}>
               <Text style={styles.accessTitle}>Gestión de Usuarios</Text>
               <Text style={styles.accessDescription}>Ver y administrar usuarios</Text>
+            </View>
+            <Text style={styles.accessArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.accessCard}
+            onPress={navigateToTickets}
+          >
+            <Text style={styles.accessIcon}>🎟️</Text>
+            <View style={styles.accessContent}>
+              <Text style={styles.accessTitle}>Tickets</Text>
+              <Text style={styles.accessDescription}>Ver y gestionar tickets</Text>
             </View>
             <Text style={styles.accessArrow}>›</Text>
           </TouchableOpacity>

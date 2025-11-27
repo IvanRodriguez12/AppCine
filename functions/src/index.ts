@@ -20,6 +20,7 @@ import verificationRoutes from './routes/verification';
 import candyProductsRoutes from './routes/candyProducts';
 import candyOrdersRoutes from './routes/candyOrders';
 import paymentsMpRoutes from './routes/paymentsMP';
+import showtimesRouter from './routes/showtimes';
 
 // Importar rutas de admin
 import adminUsersRoutes from './routes/admin/users';
@@ -61,6 +62,7 @@ app.use('/checkout-ticket', checkoutTicketRoutes);
 app.use('/candy-products', candyProductsRoutes);
 app.use('/candy-orders', candyOrdersRoutes);
 app.use('/payments/mp', paymentsMpRoutes);
+app.use('/showtimes', showtimesRouter);
 
 // Rutas de admin (requieren autenticación + rol admin)
 app.use('/admin/users', adminUsersRoutes);

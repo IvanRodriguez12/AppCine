@@ -2,7 +2,8 @@ import { Router } from 'express';
 import * as admin from 'firebase-admin';
 import { AuthRequest, optionalAuth } from '../middleware/auth';
 import { ApiError, asyncHandler } from '../middleware/errorHandler';
-import { getShowtimesByMovie } from '../services/firestoreTickets';
+import { getOccupiedSeatsByShowtime, getShowtimesByMovie } from '../services/firestoreTickets';
+
 
 const router = Router();
 
@@ -76,5 +77,31 @@ router.get(
     });
   })
 );
+
+router.get('/:id/occupied-seats', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ message: 'Falta el ID del showtime' });
+    }
+
+    const occupiedSeats = await getOccupiedSeatsByShowtime(id);
+
+    return res.json({
+      message: 'Asientos ocupados obtenidos correctamente',
+      data: {
+        showtimeId: id,
+        occupiedSeats,
+      },
+    });
+  } catch (error) {
+    console.error('Error al obtener asientos ocupados:', error);
+    return res.status(500).json({
+      message: 'Error al obtener asientos ocupados',
+      error: (error as Error).message,
+    });
+  }
+});
 
 export default router;
