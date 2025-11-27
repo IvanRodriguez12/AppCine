@@ -17,11 +17,11 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cineapp.app",
+      "bundleIdentifier": "com.cineapp",
       "googleServicesFile": "./google-services.json"
     },
     "android": {
-      "package": "com.cineapp.app",
+      "package": "com.cineapp",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/icon.png",
         "backgroundColor": "#000000"
