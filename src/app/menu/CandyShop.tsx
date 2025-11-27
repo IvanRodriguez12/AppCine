@@ -28,7 +28,6 @@ type CandyProductApi = {
   tipo: 'promocion' | 'bebida' | 'comida' | 'otros';
   categoria: 'bebida' | 'comida' | 'otros';
   precios: Record<string, number>;
-  imageKey?: string;
   stock: number;
   activo: boolean;
 };
@@ -43,10 +42,34 @@ const CATEGORIAS = [
 
 const TAMANIOS = ['pequeño', 'mediano', 'grande'];
 
+/**
+ * 🖼️ Imagen genérica por tipo/categoría:
+ * - Comida  -> pochoclos
+ * - Bebida  -> gaseosa
+ * - Promoción (combos) -> combos (pochoclos + gaseosa)
+ * - Otros   -> misma imagen que combos
+ */
+const getGenericImageForProduct = (p: CandyProductApi) => {
+  // Combos / promos y "otros" usan la misma imagen
+  if (p.tipo === 'promocion' || p.categoria === 'otros') {
+    return require('../../assets/images/bombo.png');
+  }
+
+  if (p.categoria === 'comida') {
+    return require('../../assets/images/Pororo.png');
+  }
+
+  if (p.categoria === 'bebida') {
+    return require('../../assets/images/bebida.png');
+  }
+
+  // Fallback de seguridad: combos
+  return require('../../assets/images/bombo.png');
+};
+
 const CandyShop = () => {
   const insets = useSafeAreaInsets();
 
-  // 🆕 Estado para productos desde backend
   const [productos, setProductos] = useState<CandyProductApi[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +105,7 @@ const CandyShop = () => {
           throw new Error(apiErr || 'No se pudieron cargar los productos');
         }
 
+        // No tocamos las imágenes acá, todo lo resuelve getGenericImageForProduct
         setProductos(data);
       } catch (err: any) {
         console.error('Error cargando productos Candy:', err);
@@ -136,8 +160,7 @@ const CandyShop = () => {
 
     agregarItem({
       ...producto,
-      // 🧊 Imagen placeholder por ahora, después la cambiamos por imageKey
-      imagen: require('../../assets/images/palomitas1.jpeg'),
+      imagen: getGenericImageForProduct(producto),
       tamanio,
       precio,
       cantidad: 1,
@@ -220,10 +243,7 @@ const CandyShop = () => {
           <Text style={{ color: 'red', marginBottom: 10 }}>{error}</Text>
           <TouchableOpacity
             onPress={() => {
-              // Forzar recarga simple
               setCategoria('todos');
-              // Vuelve a disparar el useEffect si querés con otra estrategia,
-              // por ahora el usuario puede hacer pull-to-refresh en el futuro.
             }}
             style={{
               paddingHorizontal: 16,
@@ -258,9 +278,9 @@ const CandyShop = () => {
 
             return (
               <View style={styles.card}>
-                {/* 🧊 Por ahora imagen fija */}
+                {/* 🖼️ Imagen genérica por tipo/categoría */}
                 <Image
-                  source={require('../../assets/images/palomitas1.jpeg')}
+                  source={getGenericImageForProduct(item)}
                   style={styles.imagen}
                 />
                 <View style={styles.info}>
