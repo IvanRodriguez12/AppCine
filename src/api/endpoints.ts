@@ -63,10 +63,10 @@ export const CANDY_ENDPOINTS = {
   GET_ORDER_BY_ID: '/candy-orders/:id',
 };
 
-// Endpoints de Pagos con MercadoPago
 export const PAYMENT_ENDPOINTS = {
   CREATE_PREFERENCE: '/payments/mp/create-preference',
   CREATE_TICKET_PREFERENCE: '/payments/mp/create-ticket-preference',
+  CREATE_SUBSCRIPTION_PREFERENCE: '/payments/mp/create-subscription-preference',
   WEBHOOK: '/payments/mp/webhook',
 };
 

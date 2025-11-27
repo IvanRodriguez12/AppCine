@@ -1,5 +1,5 @@
+import { TMDB_API_BASE_URL, TMDB_API_KEY, TMDB_IMAGE_BASE } from '@/app/config/tmdb';
 import MenuLateral from '@/components/menuLateral';
-import { TMDB_API_KEY } from '@env';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -16,8 +16,8 @@ import {
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 const anchoPantalla = Dimensions.get('window').width;
-const TMDB_API_URL = `https://api.themoviedb.org/3/movie/now_playing?language=es-AR&page=1&api_key=${TMDB_API_KEY}`;
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+
+const TMDB_API_URL = `${TMDB_API_BASE_URL}/movie/now_playing?language=es-AR&page=1&api_key=${TMDB_API_KEY}`;
 
 interface Pelicula {
   id: number;

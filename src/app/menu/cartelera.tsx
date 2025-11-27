@@ -1,5 +1,5 @@
+import { TMDB_API_BASE_URL, TMDB_API_KEY, TMDB_IMAGE_BASE } from '@/app/config/tmdb';
 import Header from '@/components/Header';
-import { TMDB_API_KEY } from '@env';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -13,8 +13,6 @@ import {
   View
 } from 'react-native';
 import { moderateScale } from 'react-native-size-matters';
-
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
 interface Pelicula {
   id: number;
@@ -37,7 +35,7 @@ const CarteleraPage: React.FC = () => {
     setCargando(true);
     try {
       const response = await fetch(
-        `https://api.themoviedb.org/3/movie/${modo}?language=es-AR&page=1&api_key=${TMDB_API_KEY}`
+        `${TMDB_API_BASE_URL}/movie/${modo}?language=es-AR&page=1&api_key=${TMDB_API_KEY}`
       );
       const data = await response.json();
       if (data.results) {
