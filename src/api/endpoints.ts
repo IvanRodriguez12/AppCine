@@ -69,6 +69,11 @@ export const PAYMENT_ENDPOINTS = {
   WEBHOOK: '/payments/mp/webhook',
 };
 
+export const NEWS_ENDPOINTS = {
+  LIST: '/news',
+  DETAIL: '/news/:id',
+};
+
 // Endpoints de Admin
 export const ADMIN_ENDPOINTS = {
   DASHBOARD: '/admin/dashboard',

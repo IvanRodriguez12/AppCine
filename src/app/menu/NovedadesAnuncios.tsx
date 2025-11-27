@@ -1,7 +1,9 @@
 import Header from '@/components/Header';
+import newsService, { News as BackendNews } from '@/services/newsService';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   BackHandler,
   Image,
   SafeAreaView,
@@ -14,17 +16,21 @@ import {
 import { moderateScale, verticalScale } from 'react-native-size-matters';
 
 interface NewsItem {
-  id: number;
+  id: string;
   title: string;
-  date: string;
-  category: string;
-  subtitle: string;
-  content: string;
+  date: string;      // formateada: "13 NOV 2025"
+  category: string;  // ej: "NOTICIAS"
+  subtitle: string;  // usamos la descripción corta
+  content: string;   // cuerpo largo
+  imageUrl?: string; // URL de imagen (opcional)
 }
 
 const NovedadesAnuncios: React.FC = () => {
   const router = useRouter();
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const backAction = () => {
@@ -39,57 +45,47 @@ const NovedadesAnuncios: React.FC = () => {
     return () => backHandler.remove();
   }, [selectedNews]);
 
-  const newsData: NewsItem[] = [
-    {
-      id: 1,
-      title: 'Festival de Cannes 2025',
-      date: '13 NOV 2025',
-      category: 'NOTICIAS',
-      subtitle: 'Las películas más esperadas del festival',
-      content: `El Festival de Cannes ha anunciado la selección oficial para su edición 2025, que se celebrará del 13 al 24 de Noviembre.
+  const formatDate = (isoDate: string): string => {
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return isoDate;
 
-Entre las películas más esperadas destacan el nuevo trabajo de Denis Villeneuve y el regreso de Sofia Coppola.
+    const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    const dia = d.getDate().toString().padStart(2, '0');
+    const mes = meses[d.getMonth()];
+    const anio = d.getFullYear();
 
-La ceremonia de apertura contará con estrellas internacionales y promete un evento inolvidable.`,
-    },
-    {
-      id: 2,
-      title: '2x1 en palomitas',
-      date: '03 NOV 2025',
-      category: 'PROMOCIÓN',
-      subtitle: 'Promoción especial para suscriptores',
-      content: `¡Oferta especial para nuestros suscriptores! Durante todo el mes de Noviembre podrás disfrutar de 2x1 en palomitas medianas y grandes.
-
-Esta promoción es válida únicamente para miembros del programa de suscripción CineApp Premium.
-
-Realiza tu compra desde la CineApp con tu cuenta, o presenta tu cuenta de suscriptor en la dulcería y disfruta de esta increíble oferta.`,
-    },
-    {
-      id: 3,
-      title: 'Nolan prepara nuevo proyecto',
-      date: '01 NOV 2025',
-      category: 'NOTICIAS',
-      subtitle: 'El director anuncia su nueva película',
-      content: `Christopher Nolan ha confirmado oficialmente su próximo proyecto cinematográfico, que comenzará a filmarse este verano.
-
-La película explorará temas de ciencia ficción y contará con un reparto estelar que incluye actores ganadores del Oscar.
-
-El estreno está programado para julio de 2026 en formato IMAX.`,
-    }
-  ];
-
-  const getNewsImage = (id: number) => {
-    switch (id) {
-      case 1:
-        return require('../../assets/images/cannes.jpg');
-      case 2:
-        return require('../../assets/images/palomitas.jpg');
-      case 3:
-        return require('../../assets/images/Christopher-Nolan-6.jpg');
-      default:
-        return null;
-    }
+    return `${dia} ${mes} ${anio}`;
   };
+
+  useEffect(() => {
+    const loadNews = async () => {
+      setLoading(true);
+      setError(null);
+
+      const response = await newsService.getNews();
+
+      if (!response.success || !response.data) {
+        setError(response.error || response.message || 'No se pudieron cargar las noticias');
+        setLoading(false);
+        return;
+      }
+
+      const mapped: NewsItem[] = response.data.map((n: BackendNews) => ({
+        id: n.id,
+        title: n.title,
+        date: formatDate(n.date),
+        category: 'NOTICIAS',
+        subtitle: n.description,
+        content: n.body,
+        imageUrl: n.imageUrl,
+      }));
+
+      setNews(mapped);
+      setLoading(false);
+    };
+
+    loadNews();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -100,20 +96,31 @@ El estreno está programado para julio de 2026 en formato IMAX.`,
         }}
       />
 
-      {selectedNews ? (
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text style={styles.loadingText}>Cargando noticias...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : selectedNews ? (
         <ScrollView style={styles.content}>
           <Text style={styles.newsTitle}>{selectedNews.title}</Text>
           <Text style={styles.newsDate}>
             {selectedNews.date} | {selectedNews.category}
           </Text>
 
-          <View style={styles.imageContainer}>
-            <Image
-              source={getNewsImage(selectedNews.id)}
-              style={styles.newsImage}
-              resizeMode="cover"
-            />
-          </View>
+          {selectedNews.imageUrl ? (
+            <View style={styles.imageContainer}>
+              <Image
+                source={{ uri: selectedNews.imageUrl }}
+                style={styles.newsImage}
+                resizeMode="cover"
+              />
+            </View>
+          ) : null}
 
           <Text style={styles.newsContent}>{selectedNews.content}</Text>
         </ScrollView>
@@ -122,15 +129,17 @@ El estreno está programado para julio de 2026 en formato IMAX.`,
           <Text style={styles.sectionTitle}>NOVEDADES/</Text>
           <Text style={styles.sectionTitle}>ANUNCIOS</Text>
 
-          {newsData.map((news) => (
+          {news.map((item) => (
             <TouchableOpacity
-              key={news.id}
+              key={item.id}
               style={styles.newsCard}
-              onPress={() => setSelectedNews(news)}
+              onPress={() => setSelectedNews(item)}
             >
-              <Text style={styles.cardTitle}>{news.title}</Text>
-              <Text style={styles.cardSubtitle}>{news.subtitle}</Text>
-              <Text style={styles.cardDate}>{news.date}</Text>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={styles.cardSubtitle} numberOfLines={2}>
+                {item.subtitle}
+              </Text>
+              <Text style={styles.cardDate}>{item.date}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -204,6 +213,26 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(15),
     lineHeight: moderateScale(22),
     marginBottom: verticalScale(24),
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: verticalScale(8),
+    color: '#ccc',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(16),
+  },
+  errorText: {
+    color: '#ff7675',
+    textAlign: 'center',
+    fontSize: moderateScale(14),
   },
 });
 
