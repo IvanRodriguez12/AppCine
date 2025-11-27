@@ -41,30 +41,50 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [loadAttempts, setLoadAttempts] = useState(0);
 
   useEffect(() => {
+    // Cargar métricas solo una vez al montar
     loadMetrics();
   }, []);
 
   const loadMetrics = async () => {
+    // Evitar múltiples requests simultáneos
+    if (isLoading && loadAttempts > 0) {
+      console.log('⚠️ Carga ya en progreso, ignorando...');
+      return;
+    }
+
     try {
       setIsLoading(true);
+      setLoadAttempts(prev => prev + 1);
+      
+      console.log('📊 Cargando métricas del dashboard...');
       const result = await adminService.getDashboardMetrics();
       
       if (result.success && result.data) {
         setMetrics(result.data);
+        console.log('✅ Métricas cargadas exitosamente');
       } else {
+        console.error('❌ Error al cargar métricas:', result.error);
         Alert.alert('Error', result.error || 'No se pudieron cargar las métricas');
       }
     } catch (error) {
-      console.error('Error cargando métricas:', error);
+      console.error('❌ Error cargando métricas:', error);
       Alert.alert('Error', 'Error al cargar las estadísticas');
     } finally {
       setIsLoading(false);
+      setLoadAttempts(0);
     }
   };
 
   const handleRefresh = async () => {
+    // Evitar refresh si ya está refrescando
+    if (isRefreshing) {
+      console.log('⚠️ Refresh ya en progreso');
+      return;
+    }
+    
     setIsRefreshing(true);
     await loadMetrics();
     setIsRefreshing(false);
@@ -73,6 +93,11 @@ export default function AdminDashboard() {
   const handleExportMetrics = async () => {
     if (!metrics) {
       Alert.alert('Error', 'No hay datos para exportar');
+      return;
+    }
+
+    if (isExporting) {
+      console.log('⚠️ Exportación ya en progreso');
       return;
     }
 
@@ -93,6 +118,11 @@ export default function AdminDashboard() {
   const handleExportVentasPorDia = async () => {
     if (!metrics?.periodos?.ultimosDias) {
       Alert.alert('Error', 'No hay datos de ventas por día');
+      return;
+    }
+
+    if (isExporting) {
+      console.log('⚠️ Exportación ya en progreso');
       return;
     }
 
@@ -126,6 +156,20 @@ export default function AdminDashboard() {
       ]
     );
   };
+
+  const navigateToOrders = () => {
+    console.log('🍿 Navegando a Pedidos...');
+    router.push('/(admin)/candyOrders');
+  };
+
+  const navigateToProducts = () => {
+    console.log('🍬 Navegando a Productos...');
+    router.push('/(admin)/candyProducts');
+  };
+  const navigateToUsers = () => {
+  console.log('👥 Navegando a Usuarios...');
+  router.push('/(admin)/usuarios');
+};
 
   const formatCurrency = (value: number | undefined | null) => {
     if (value === undefined || value === null) return '$0';
@@ -196,7 +240,7 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        {/* Botones de exportación - Ahora más visibles */}
+        {/* Botones de exportación */}
         <View style={styles.exportSection}>
           <Text style={styles.exportTitle}>📊 Exportar Datos</Text>
           <View style={styles.exportButtonsRow}>
@@ -378,7 +422,7 @@ export default function AdminDashboard() {
           
           <TouchableOpacity
             style={styles.accessCard}
-            onPress={() => Alert.alert('Próximamente', 'FASE 3: Gestión de Usuarios')}
+            onPress={navigateToUsers}
           >
             <Text style={styles.accessIcon}>👥</Text>
             <View style={styles.accessContent}>
@@ -390,7 +434,7 @@ export default function AdminDashboard() {
 
           <TouchableOpacity
             style={styles.accessCard}
-            onPress={() => router.push('/(admin)/candyOrders/list')}
+            onPress={navigateToOrders}
           >
             <Text style={styles.accessIcon}>🍿</Text>
             <View style={styles.accessContent}>
@@ -402,7 +446,7 @@ export default function AdminDashboard() {
 
           <TouchableOpacity
             style={styles.accessCard}
-            onPress={() => Alert.alert('Próximamente', 'FASE 5: Gestión de Productos')}
+            onPress={navigateToProducts}
           >
             <Text style={styles.accessIcon}>🍬</Text>
             <View style={styles.accessContent}>
@@ -413,7 +457,7 @@ export default function AdminDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Botón de logout - Con más espacio abajo */}
+        {/* Botón de logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
         </TouchableOpacity>

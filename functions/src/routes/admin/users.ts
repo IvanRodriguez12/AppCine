@@ -1,450 +1,375 @@
-/**
- * routes/admin/users.ts
- * Gestión de usuarios para administradores
- */
-
+// functions/src/routes/admin/users.ts
 import { Router } from 'express';
 import { db, auth } from '../../config/firebase';
 import { verifyToken, requireAdmin, AuthRequest } from '../../middleware/auth';
 import { asyncHandler, ApiError } from '../../middleware/errorHandler';
-import { User } from '../../models/user';
+import { User, UserRole, AccountStatus, AccountLevel } from '../../models/user';
 
 const router = Router();
 
-// Aplicar middleware de autenticación y admin a todas las rutas
+// ✅ USAR EL MISMO PATRÓN QUE candyOrders
 router.use(verifyToken);
 router.use(requireAdmin);
 
-/**
- * GET /admin/users
- * Listar todos los usuarios con paginación y filtros
- */
+// GET /admin/users
+// Listar todos los usuarios con filtros
 router.get('/', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { 
-    limit = '20', 
-    startAfter, 
-    role, 
-    accountStatus, 
+  const {
+    page = 1,
+    limit = 20,
+    search,
+    role,
     accountLevel,
-    orderBy = 'createdAt',
-    order = 'desc'
+    accountStatus,
+    verified,
+    hasDni,
+    hasFaceVerified
   } = req.query;
 
-  let query = db.collection('users').orderBy(orderBy as string, order as any);
+  let query: FirebaseFirestore.Query = db.collection('users');
 
-  // Filtros opcionales
-  if (role) {
-    query = query.where('role', '==', role) as any;
+  // ✅ SOLO UN FILTRO DE BÚSQUEDA POR RANGO (displayName)
+  if (search) {
+    query = query.where('displayName', '>=', search)
+                 .where('displayName', '<=', search + '\uf8ff');
   }
 
-  if (accountStatus) {
-    query = query.where('accountStatus', '==', accountStatus) as any;
+  // ✅ FILTROS DE IGUALDAD SIMPLES (máximo 2-3 combinados)
+  if (role) {
+    query = query.where('role', '==', role);
   }
 
   if (accountLevel) {
-    query = query.where('accountLevel', '==', accountLevel) as any;
+    query = query.where('accountLevel', '==', accountLevel);
+  }
+
+  if (accountStatus) {
+    query = query.where('accountStatus', '==', accountStatus);
+  }
+
+  // ✅ FILTROS SIMPLES (sin verified=true que usa 3 filtros)
+  if (hasDni === 'true') {
+    query = query.where('dniUploaded', '==', true);
+  } else if (hasDni === 'false') {
+    query = query.where('dniUploaded', '==', false);
+  }
+
+  if (hasFaceVerified === 'true') {
+    query = query.where('faceVerified', '==', true);
+  } else if (hasFaceVerified === 'false') {
+    query = query.where('faceVerified', '==', false);
   }
 
   // Paginación
-  if (startAfter) {
-    const lastDoc = await db.collection('users').doc(startAfter as string).get();
-    if (lastDoc.exists) {
-      query = query.startAfter(lastDoc) as any;
-    }
+  const pageNum = parseInt(page as string);
+  const limitNum = parseInt(limit as string);
+  const offset = (pageNum - 1) * limitNum;
+
+  const snapshot = await query.orderBy('createdAt', 'desc')
+                             .limit(limitNum)
+                             .offset(offset)
+                             .get();
+
+  let users = snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as (User & { id: string })[];
+
+  // ✅ FILTRAR verified EN MEMORIA (evita índice complejo)
+  if (verified === 'true') {
+    users = users.filter(user => 
+      user.isEmailVerified && user.dniUploaded && user.faceVerified
+    );
   }
 
-  query = query.limit(Number(limit)) as any;
-
-  const snapshot = await query.get();
-
-  const users = snapshot.docs.map(doc => ({
-    uid: doc.id,
-    ...doc.data(),
-    // Ocultar datos sensibles
-    dniUrl: undefined,
-    selfieUrl: undefined
-  }));
-
-  const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+  // ✅ Obtener total después del filtrado en memoria
+  const total = users.length;
 
   res.json({
+    success: true,
     users,
-    count: users.length,
-    hasMore: users.length === Number(limit),
-    nextPageToken: lastVisible?.id || null
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum)
+    }
   });
 }));
 
-/**
- * GET /admin/users/stats
- * Estadísticas generales de usuarios
- */
+// GET /admin/users/stats
+// Estadísticas de usuarios
 router.get('/stats', asyncHandler(async (req: AuthRequest, res: any) => {
-  const usersSnapshot = await db.collection('users').get();
-  const users = usersSnapshot.docs.map(doc => doc.data() as User);
+  const snapshot = await db.collection('users').get();
+  const users = snapshot.docs.map(doc => doc.data() as User);
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - 7);
+  // ✅ Calcular fullyVerified en memoria también
+  const fullyVerified = users.filter(u => 
+    u.isEmailVerified && u.dniUploaded && u.faceVerified
+  ).length;
 
   const stats = {
     total: users.length,
-    newThisMonth: users.filter(u => new Date(u.createdAt) >= startOfMonth).length,
-    newThisWeek: users.filter(u => new Date(u.createdAt) >= startOfWeek).length,
-    verified: users.filter(u => u.isEmailVerified).length,
-    withDni: users.filter(u => u.dniUploaded).length,
-    withFaceVerified: users.filter(u => u.faceVerified).length,
     byRole: {
       user: users.filter(u => u.role === 'user').length,
       admin: users.filter(u => u.role === 'admin').length,
-      moderator: users.filter(u => u.role === 'moderator').length,
+      moderator: users.filter(u => u.role === 'moderator').length
     },
     byAccountLevel: {
       basic: users.filter(u => u.accountLevel === 'basic').length,
       verified: users.filter(u => u.accountLevel === 'verified').length,
       premium: users.filter(u => u.accountLevel === 'premium').length,
-      full: users.filter(u => u.accountLevel === 'full').length,
+      full: users.filter(u => u.accountLevel === 'full').length
     },
     byAccountStatus: {
       active: users.filter(u => u.accountStatus === 'active').length,
       suspended: users.filter(u => u.accountStatus === 'suspended').length,
       banned: users.filter(u => u.accountStatus === 'banned').length,
-      pending: users.filter(u => u.accountStatus === 'pending').length,
+      pending: users.filter(u => u.accountStatus === 'pending').length
+    },
+    verificationStatus: {
+      emailVerified: users.filter(u => u.isEmailVerified).length,
+      dniUploaded: users.filter(u => u.dniUploaded).length,
+      faceVerified: users.filter(u => u.faceVerified).length,
+      fullyVerified: fullyVerified // ✅ Usar el calculado en memoria
+    },
+    premium: {
+      premium: users.filter(u => u.isPremium).length,
+      nonPremium: users.filter(u => !u.isPremium).length
+    },
+    favorites: {
+      totalFavorites: users.reduce((sum, user) => sum + user.favorites.length, 0),
+      usersWithFavorites: users.filter(u => u.favorites.length > 0).length
     }
   };
 
-  res.json(stats);
+  res.json({
+    success: true,
+    stats
+  });
 }));
 
-/**
- * GET /admin/users/:id
- * Ver detalles completos de un usuario
- */
+// GET /admin/users/:id
+// Obtener usuario específico con toda la información
 router.get('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
 
+  // Obtener de Firestore
   const userDoc = await db.collection('users').doc(id).get();
+  
+  if (!userDoc.exists) {
+    throw new ApiError(404, 'Usuario no encontrado');
+  }
 
+  // Obtener de Firebase Auth para información adicional
+  let authUser;
+  try {
+    authUser = await auth.getUser(id);
+  } catch (error) {
+    console.warn('Usuario no encontrado en Firebase Auth:', id);
+  }
+
+  const userData = userDoc.data() as User;
+
+  const userWithAuthInfo = {
+    id: userDoc.id,
+    ...userData,
+    authInfo: authUser ? {
+      emailVerified: authUser.emailVerified,
+      disabled: authUser.disabled,
+      lastSignInTime: authUser.metadata.lastSignInTime,
+      creationTime: authUser.metadata.creationTime
+    } : null
+  };
+
+  res.json({
+    success: true,
+    user: userWithAuthInfo
+  });
+}));
+
+// PUT /admin/users/:id/status
+// Cambiar estado de cuenta
+router.put('/:id/status', asyncHandler(async (req: AuthRequest, res: any) => {
+  const { id } = req.params;
+  const { accountStatus, reason } = req.body;
+
+  const validStatuses: AccountStatus[] = ['active', 'suspended', 'banned', 'pending'];
+  if (!validStatuses.includes(accountStatus)) {
+    throw new ApiError(400, 'Estado de cuenta inválido');
+  }
+
+  const userDoc = await db.collection('users').doc(id).get();
+  
   if (!userDoc.exists) {
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
   const userData = userDoc.data() as User;
 
-  // Obtener compras de tickets
-  const ticketsSnapshot = await db.collection('tickets')
-    .where('userId', '==', id)
-    .orderBy('createdAt', 'desc')
-    .limit(10)
-    .get();
+  // Actualizar Firestore
+  await db.collection('users').doc(id).update({
+    accountStatus,
+    updatedAt: new Date().toISOString()
+  });
 
-  const tickets = ticketsSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
+  // Si se suspende o banea, también deshabilitar en Auth
+  if (accountStatus === 'suspended' || accountStatus === 'banned') {
+    await auth.updateUser(id, {
+      disabled: true
+    });
+  } else {
+    // Para active o pending, habilitar en Auth
+    await auth.updateUser(id, {
+      disabled: false
+    });
+  }
 
-  // Obtener compras de candy
-  const candyOrdersSnapshot = await db.collection('candyOrders')
-    .where('userId', '==', id)
-    .orderBy('createdAt', 'desc')
-    .limit(10)
-    .get();
-
-  const candyOrders = candyOrdersSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
-
-  // Calcular estadísticas del usuario
-  const allTickets = await db.collection('tickets').where('userId', '==', id).get();
-  const allCandyOrders = await db.collection('candyOrders').where('userId', '==', id).get();
-
-  const totalSpent = 
-    allTickets.docs.reduce((sum, doc) => sum + (doc.data().totalAmount || 0), 0) +
-    allCandyOrders.docs.reduce((sum, doc) => sum + (doc.data().totalAmount || 0), 0);
+  // Registrar en historial de moderación
+  await db.collection('moderationLogs').add({
+    userId: id,
+    userEmail: userData.email,
+    action: 'account_status_change',
+    previousStatus: userData.accountStatus,
+    newStatus: accountStatus,
+    reason: reason || 'Cambio de estado por administrador',
+    adminId: req.user?.uid,
+    adminEmail: req.user?.email,
+    timestamp: new Date().toISOString()
+  });
 
   res.json({
-    user: {
-      ...userData,
-      uid: id  // ✅ Sobrescribe el uid con el del documento
-    },
-    activity: {
-      recentTickets: tickets,
-      recentCandyOrders: candyOrders,
-      totalTickets: allTickets.size,
-      totalCandyOrders: allCandyOrders.size,
-      totalSpent
-    }
+    success: true,
+    message: `Estado de cuenta actualizado a: ${accountStatus}`,
+    userId: id,
+    newStatus: accountStatus
   });
 }));
 
-/**
- * GET /admin/users/search/:query
- * Buscar usuarios por email o nombre
- */
-router.get('/search/:query', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { query } = req.params;
-  const searchQuery = query.toLowerCase();
-
-  // Buscar en Firestore (esto es ineficiente, considera usar Algolia para producción)
-  const usersSnapshot = await db.collection('users').get();
-  
-  const users = usersSnapshot.docs
-    .map(doc => ({
-      uid: doc.id,
-      ...doc.data()
-    }))
-    .filter((user: any) => 
-      user.email?.toLowerCase().includes(searchQuery) ||
-      user.displayName?.toLowerCase().includes(searchQuery) ||
-      user.uid?.toLowerCase().includes(searchQuery)
-    )
-    .slice(0, 20) // Limitar a 20 resultados
-    .map((user: any) => ({
-      ...user,
-      // Ocultar datos sensibles
-      dniUrl: undefined,
-      selfieUrl: undefined
-    }));
-
-  res.json({
-    query,
-    users,
-    count: users.length
-  });
-}));
-
-/**
- * PUT /admin/users/:id/role
- * Cambiar rol de un usuario
- */
+// PUT /admin/users/:id/role
+// Cambiar rol de usuario
 router.put('/:id/role', asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
   const { role } = req.body;
 
-  if (!['user', 'admin', 'moderator'].includes(role)) {
-    throw new ApiError(400, 'Rol inválido. Debe ser: user, admin, o moderator');
+  const validRoles: UserRole[] = ['user', 'admin', 'moderator'];
+  if (!validRoles.includes(role)) {
+    throw new ApiError(400, 'Rol inválido');
   }
 
   const userDoc = await db.collection('users').doc(id).get();
-
+  
   if (!userDoc.exists) {
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
-  // Actualizar en Firestore
+  const userData = userDoc.data() as User;
+
   await db.collection('users').doc(id).update({
     role,
     updatedAt: new Date().toISOString()
   });
 
-  // Actualizar custom claims en Firebase Auth
-  await auth.setCustomUserClaims(id, { 
-    role,
-    admin: role === 'admin',
-    moderator: role === 'moderator'
+  // Registrar en historial
+  await db.collection('moderationLogs').add({
+    userId: id,
+    userEmail: userData.email,
+    action: 'role_change',
+    previousRole: userData.role,
+    newRole: role,
+    adminId: req.user?.uid,
+    adminEmail: req.user?.email,
+    timestamp: new Date().toISOString()
   });
 
-  console.log(`✅ Rol actualizado por admin ${req.user?.uid}: ${id} → ${role}`);
-
   res.json({
-    message: 'Rol actualizado exitosamente',
+    success: true,
+    message: `Rol actualizado a: ${role}`,
     userId: id,
     newRole: role
   });
 }));
 
-/**
- * PUT /admin/users/:id/status
- * Cambiar estado de cuenta (active, suspended, banned)
- */
-router.put('/:id/status', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-  const { status, reason } = req.body;
-
-  if (!['active', 'suspended', 'banned'].includes(status)) {
-    throw new ApiError(400, 'Estado inválido. Debe ser: active, suspended, o banned');
-  }
-
-  const userDoc = await db.collection('users').doc(id).get();
-
-  if (!userDoc.exists) {
-    throw new ApiError(404, 'Usuario no encontrado');
-  }
-
-  // No permitir cambiar el estado del propio admin
-  if (id === req.user?.uid) {
-    throw new ApiError(400, 'No puedes cambiar tu propio estado');
-  }
-
-  const updateData: any = {
-    accountStatus: status,
-    updatedAt: new Date().toISOString()
-  };
-
-  if (status === 'suspended' || status === 'banned') {
-    updateData.suspensionReason = reason || 'Sin razón especificada';
-    updateData.suspendedAt = new Date().toISOString();
-    updateData.suspendedBy = req.user?.uid;
-  } else {
-    updateData.suspensionReason = null;
-    updateData.suspendedAt = null;
-    updateData.suspendedBy = null;
-  }
-
-  await db.collection('users').doc(id).update(updateData);
-
-  // Si está baneado, desactivar en Firebase Auth
-  if (status === 'banned') {
-    await auth.updateUser(id, { disabled: true });
-  } else {
-    await auth.updateUser(id, { disabled: false });
-  }
-
-  console.log(`✅ Estado actualizado por admin ${req.user?.uid}: ${id} → ${status}`);
-
-  res.json({
-    message: `Usuario ${status === 'active' ? 'reactivado' : status === 'suspended' ? 'suspendido' : 'baneado'} exitosamente`,
-    userId: id,
-    newStatus: status
-  });
-}));
-
-/**
- * PUT /admin/users/:id/account-level
- * Cambiar nivel de cuenta manualmente
- */
-router.put('/:id/account-level', asyncHandler(async (req: AuthRequest, res: any) => {
+// PUT /admin/users/:id/level
+// Cambiar nivel de cuenta
+router.put('/:id/level', asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
   const { accountLevel } = req.body;
 
-  if (!['basic', 'verified', 'premium', 'full'].includes(accountLevel)) {
-    throw new ApiError(400, 'Nivel inválido. Debe ser: basic, verified, premium, o full');
+  const validLevels: AccountLevel[] = ['basic', 'verified', 'premium', 'full'];
+  if (!validLevels.includes(accountLevel)) {
+    throw new ApiError(400, 'Nivel de cuenta inválido');
   }
 
   const userDoc = await db.collection('users').doc(id).get();
-
+  
   if (!userDoc.exists) {
     throw new ApiError(404, 'Usuario no encontrado');
   }
+
+  const userData = userDoc.data() as User;
 
   await db.collection('users').doc(id).update({
     accountLevel,
     updatedAt: new Date().toISOString()
   });
 
-  console.log(`✅ Account level actualizado por admin ${req.user?.uid}: ${id} → ${accountLevel}`);
+  // Registrar en historial
+  await db.collection('moderationLogs').add({
+    userId: id,
+    userEmail: userData.email,
+    action: 'account_level_change',
+    previousLevel: userData.accountLevel,
+    newLevel: accountLevel,
+    adminId: req.user?.uid,
+    adminEmail: req.user?.email,
+    timestamp: new Date().toISOString()
+  });
 
   res.json({
-    message: 'Nivel de cuenta actualizado exitosamente',
+    success: true,
+    message: `Nivel de cuenta actualizado a: ${accountLevel}`,
     userId: id,
-    newAccountLevel: accountLevel
+    newLevel: accountLevel
   });
 }));
 
-/**
- * DELETE /admin/users/:id
- * Eliminar usuario completamente (GDPR compliance)
- */
+// DELETE /admin/users/:id
+// Eliminar usuario permanentemente
 router.delete('/:id', asyncHandler(async (req: AuthRequest, res: any) => {
   const { id } = req.params;
 
-  // No permitir que el admin se elimine a sí mismo
-  if (id === req.user?.uid) {
-    throw new ApiError(400, 'No puedes eliminar tu propia cuenta como admin');
-  }
-
   const userDoc = await db.collection('users').doc(id).get();
-
-  if (!userDoc.exists) {
-    throw new ApiError(404, 'Usuario no encontrado');
-  }
-
-  // Eliminar de Firebase Auth
-  try {
-    await auth.deleteUser(id);
-  } catch (error: any) {
-    console.error('Error eliminando de Auth:', error);
-    // Continuar de todos modos
-  }
-
-  // Eliminar de Firestore
-  await db.collection('users').doc(id).delete();
-
-  // TODO: Eliminar archivos de Storage (DNI, selfies)
-  // await storageService.deleteAllUserFiles(id);
-
-  // TODO: Marcar tickets y órdenes como del usuario eliminado
-  // O eliminarlos según tu política
-
-  console.log(`🗑️  Usuario eliminado por admin ${req.user?.uid}: ${id}`);
-
-  res.json({
-    message: 'Usuario eliminado exitosamente',
-    userId: id
-  });
-}));
-
-/**
- * POST /admin/users/:id/reset-password
- * Enviar email de reseteo de contraseña a un usuario
- */
-router.post('/:id/reset-password', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-
-  const userDoc = await db.collection('users').doc(id).get();
-
+  
   if (!userDoc.exists) {
     throw new ApiError(404, 'Usuario no encontrado');
   }
 
   const userData = userDoc.data() as User;
-  const resetLink = await auth.generatePasswordResetLink(userData.email);
 
-  // TODO: Enviar email con emailService
-  // await emailService.sendPasswordResetEmail({
-  //   email: userData.email,
-  //   displayName: userData.displayName,
-  //   resetLink
-  // });
+  // Eliminar de Firestore
+  await db.collection('users').doc(id).delete();
 
-  console.log(`📧 Link de reseteo generado para ${userData.email}:`, resetLink);
-
-  res.json({
-    message: 'Email de reseteo de contraseña enviado',
-    email: userData.email
-  });
-}));
-
-/**
- * POST /admin/users/:id/verify-email
- * Forzar verificación de email (sin enviar email)
- */
-router.post('/:id/verify-email', asyncHandler(async (req: AuthRequest, res: any) => {
-  const { id } = req.params;
-
-  const userDoc = await db.collection('users').doc(id).get();
-
-  if (!userDoc.exists) {
-    throw new ApiError(404, 'Usuario no encontrado');
+  // Eliminar de Firebase Auth
+  try {
+    await auth.deleteUser(id);
+  } catch (error) {
+    console.warn('Error eliminando usuario de Auth:', error);
   }
 
-  await auth.updateUser(id, {
-    emailVerified: true
+  // Registrar en historial
+  await db.collection('moderationLogs').add({
+    userId: id,
+    userEmail: userData.email,
+    action: 'permanent_deletion',
+    adminId: req.user?.uid,
+    adminEmail: req.user?.email,
+    timestamp: new Date().toISOString()
   });
-
-  await db.collection('users').doc(id).update({
-    isEmailVerified: true,
-    emailVerifiedAt: new Date().toISOString(),
-    accountLevel: 'verified',
-    updatedAt: new Date().toISOString()
-  });
-
-  console.log(`✅ Email verificado manualmente por admin ${req.user?.uid}: ${id}`);
 
   res.json({
-    message: 'Email verificado exitosamente',
+    success: true,
+    message: 'Usuario eliminado permanentemente',
     userId: id
   });
 }));

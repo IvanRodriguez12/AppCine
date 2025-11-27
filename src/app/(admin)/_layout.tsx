@@ -1,3 +1,4 @@
+// app/(admin)/_layout.tsx
 import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { useAuth } from '@/context/authContext';
@@ -39,7 +40,7 @@ export default function AdminLayout() {
     );
   }
 
-  // ✅ Usuario es admin, mostrar layout
+  // Usuario es admin, mostrar layout
   return (
     <Stack
       screenOptions={{
@@ -56,11 +57,24 @@ export default function AdminLayout() {
         name="dashboard" 
         options={{ 
           title: '👑 Panel Admin',
-          headerLeft: () => null, // No permite volver atrás
+          headerLeft: () => null, 
+        }} 
+      />
+      {/* 🆕 AGREGAR PANTALLAS DE USUARIOS */}
+      <Stack.Screen 
+        name="usuarios/index" 
+        options={{ 
+          title: '👥 Gestión de Usuarios',
         }} 
       />
       <Stack.Screen 
-        name="candyOrders/index" 
+        name="usuarios/[id]" 
+        options={{ 
+          title: '👤 Detalles del Usuario',
+        }} 
+      />
+      <Stack.Screen 
+        name="candyOrders/list" 
         options={{ 
           title: '🍿 Pedidos de Golosinas',
         }} 
@@ -69,6 +83,18 @@ export default function AdminLayout() {
         name="candyOrders/[id]" 
         options={{ 
           title: '📦 Detalle del Pedido',
+        }} 
+      />
+      <Stack.Screen 
+        name="candyProducts/list" 
+        options={{ 
+          title: '🍬 Productos - Golosinas',
+        }} 
+      />
+      <Stack.Screen 
+        name="candyProducts/[id]" 
+        options={{ 
+          title: '📦 Detalles del Producto',
         }} 
       />
     </Stack>
