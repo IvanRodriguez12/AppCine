@@ -1,297 +1,175 @@
-import { TMDB_API_KEY } from '@env';
+// src/app/menu/MisReviews.tsx
+import Header from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
-  Image,
+  FlatList,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { moderateScale, verticalScale } from 'react-native-size-matters';
 
-import { useAuth } from '@/context/authContext';
-import reviewsApi, { ReviewDto } from '@/services/reviewsApi';
+const REVIEWS_KEY = '@reviews_peliculas';
 
-interface Review {
-  id: number;
-  date: string;
+type Review = {
+  movieId: string;
+  movieTitle: string;
   rating: number;
-  subject: string;
-  content: string;
-  authorEmail: string;
-  authorName: string;
-  movieid: number;
-}
-
-const MisReviews: React.FC = () => {
-  const router = useRouter();
-  const { user } = useAuth();
-  const [tusReviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const handleBackPress = (): void => {
-    router.back();
-  };
-
-  useEffect(() => {
-    const cargar = async () => {
-      if (!user) {
-        setReviews([]);
-        setLoading(false);
-        return;
-      }
-      try {
-        setLoading(true);
-        const apiReviews: ReviewDto[] = await reviewsApi.getByUser(user.uid);
-
-        const mapped: Review[] = await Promise.all(
-          apiReviews.map(async (r) => {
-            let movieTitle = `Película ${r.movie_id}`;
-            try {
-              const res = await fetch(
-                `https://api.themoviedb.org/3/movie/${r.movie_id}?language=es-AR&api_key=${TMDB_API_KEY}`,
-              );
-              const data = await res.json();
-              if (data?.title) {
-                movieTitle = data.title;
-              }
-            } catch (error) {
-              console.warn('Error obteniendo título de película', error);
-            }
-
-            return {
-              id: r.id,
-              date: r.created_at,
-              rating: r.rating,
-              subject: movieTitle,          // título de la peli
-              content: r.comment || '',     // cuerpo de la review
-              authorEmail: user.email ?? '',
-              authorName: 'Vos',            // siempre vos en MisReviews
-              movieid: r.movie_id,
-            };
-          }),
-        );
-
-        // ordenar por fecha (más nuevas primero)
-        mapped.sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-        );
-
-        setReviews(mapped);
-      } catch (error) {
-        console.error('Error cargando reviews del usuario:', error);
-        setReviews([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    cargar();
-  }, [user]);
-
-  const handlePressReview = (review: Review) => {
-  Alert.alert(
-    'Review',
-    '¿Qué querés hacer con esta review?',
-    [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Editar',
-        onPress: () => {
-          router.push({
-            pathname: '/menu/reviews/escribir',
-            params: {
-              movieId: review.movieid.toString(),
-              title: review.subject,
-            },
-          });
-        },
-      },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await reviewsApi.delete(review.id);
-            // Sacarla de la lista local
-            setReviews((prev) => prev.filter((r) => r.id !== review.id));
-          } catch (e) {
-            console.error('Error eliminando review:', e);
-            Alert.alert(
-              'Error',
-              'No se pudo eliminar la review. Intentá de nuevo.',
-            );
-          }
-        },
-      },
-    ],
-    { cancelable: true },
-  );
+  body: string;
+  createdAt: string;
 };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View
-          style={{
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ color: 'white' }}>Cargando...</Text>
-        </View>
-      </SafeAreaView>
+const MisReviews: React.FC = () => {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  const cargarReviews = useCallback(async () => {
+    try {
+      setLoading(true);
+      const raw = await AsyncStorage.getItem(REVIEWS_KEY);
+      const all: Review[] = raw ? JSON.parse(raw) : [];
+      // Ordenamos por fecha
+      all.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setReviews(all);
+    } catch (e) {
+      console.error('Error cargando mis reviews:', e);
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      cargarReviews();
+    }, [cargarReviews])
+  );
+
+  const handlePressReview = (review: Review) => {
+    Alert.alert(
+      'Review',
+      '¿Querés editar esta review?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Editar',
+          onPress: () => {
+            router.push({
+              pathname: '/menu/reviews/escribir',
+              params: {
+                movieId: review.movieId,
+                title: review.movieTitle,
+              },
+            });
+          },
+        },
+      ],
+      { cancelable: true }
     );
-  }
+  };
+
+  const renderItem = ({ item }: { item: Review }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => handlePressReview(item)}
+    >
+      <Text style={styles.movieTitle}>{item.movieTitle}</Text>
+      <View style={styles.row}>
+        <View style={styles.starsRow}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Ionicons
+              key={i}
+              name={i < item.rating ? 'star' : 'star-outline'}
+              size={16}
+              color="#ffd700"
+            />
+          ))}
+        </View>
+        <Text style={styles.date}>
+          {new Date(item.createdAt).toLocaleDateString()}
+        </Text>
+      </View>
+      <Text
+        style={styles.body}
+        numberOfLines={2}
+        ellipsizeMode="tail"
+      >
+        {item.body}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <>
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBackPress}
-          >
-            <Ionicons name="arrow-back" size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.title}>CineApp</Text>
-          <Image
-            source={require('../../assets/images/adaptive-icon.png')}
-            style={styles.logo}
-          />
-        </View>
+    <SafeAreaView style={styles.container}>
+      <Header title="Mis reviews" />
 
-        {/* Contenido */}
-        <ScrollView style={styles.container}>
-          <Text style={styles.titulo}>Mis Reviews</Text>
-          {tusReviews.length === 0 ? (
-            <Text style={styles.sinCupones}>
-              No realizaste ninguna review.
-            </Text>
-          ) : (
-            tusReviews.map((r: Review, index: number) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.infoContainer}
-                onPress={() => handlePressReview(r)}
-              >
-                <View>
-                  <View style={styles.titleStars}>
-                    <Text style={styles.infoTitle}>{r.authorName}</Text>
-                    <View style={styles.starsContainer}>
-                      {[1, 2, 3, 4, 5].map((star: number) => (
-                        <TouchableOpacity
-                          key={star}
-                          style={styles.starButton}
-                        >
-                          <Ionicons
-                            name={
-                              star <= r.rating ? 'star' : 'star-outline'
-                            }
-                            size={10}
-                            color={star <= r.rating ? '#FFD700' : '#666'}
-                          />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                  <Text style={styles.infoText}>{r.subject}</Text>
-                  <Text style={styles.infoText}>{r.content}</Text>
-                  <Text style={styles.fecha}>
-                    {new Date(r.date).toLocaleDateString()}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </>
+      {/* botón volver */}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => router.back()}
+      >
+        <Ionicons name="arrow-back" size={26} color="white" />
+      </TouchableOpacity>
+
+      <View style={{ marginTop: 70, paddingHorizontal: 16, flex: 1 }}>
+        {loading ? (
+          <Text style={{ color: 'white' }}>Cargando...</Text>
+        ) : reviews.length === 0 ? (
+          <Text style={styles.emptyText}>
+            Todavía no escribiste ninguna review.
+          </Text>
+        ) : (
+          <FlatList
+            data={reviews}
+            keyExtractor={(_, idx) => idx.toString()}
+            renderItem={renderItem}
+            contentContainerStyle={{ paddingBottom: 24 }}
+          />
+        )}
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'black',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: moderateScale(16),
-    marginTop: verticalScale(20),
-    marginBottom: verticalScale(20),
-  },
-  backButton: {
-    padding: moderateScale(4),
-  },
-  title: {
-    fontSize: moderateScale(24),
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  logo: {
-    width: moderateScale(50),
-    height: moderateScale(50),
-  },
-  titulo: {
-    fontSize: moderateScale(22),
-    color: 'white',
-    fontWeight: 'bold',
-    textAlign: 'left',
-    marginLeft: 20,
-    marginTop: 35,
-  },
-  sinCupones: {
-    color: 'white',
-    fontSize: moderateScale(16),
+  container: { flex: 1, backgroundColor: 'black' },
+  backButton: { position: 'absolute', top: 65, left: 16, zIndex: 50 },
+  emptyText: {
+    color: '#aaa',
+    fontSize: 14,
     textAlign: 'center',
-    marginTop: verticalScale(50),
+    marginTop: 20,
   },
-  infoContainer: {
-    backgroundColor: '#2a2a2a',
-    margin: moderateScale(16),
-    padding: moderateScale(16),
-    borderRadius: moderateScale(12),
+  card: {
+    backgroundColor: '#1f1f1f',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
   },
-  infoTitle: {
+  movieTitle: {
     color: 'white',
-    fontSize: moderateScale(16),
+    fontSize: 16,
     fontWeight: 'bold',
+    marginBottom: 4,
   },
-  infoText: {
-    color: '#ccc',
-    fontSize: moderateScale(14),
-    marginBottom: verticalScale(12),
-  },
-  fecha: {
-    flexDirection: 'row',
-    fontSize: 12,
-    color: 'gray',
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  starButton: {
-    padding: 2,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    alignSelf: 'flex-end',
-    alignItems: 'center',
-  },
-  titleStars: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: verticalScale(2),
+    alignItems: 'center',
   },
+  starsRow: { flexDirection: 'row', gap: 2 },
+  date: { color: '#999', fontSize: 11 },
+  body: { color: '#ddd', fontSize: 13, marginTop: 6 },
 });
 
 export default MisReviews;
