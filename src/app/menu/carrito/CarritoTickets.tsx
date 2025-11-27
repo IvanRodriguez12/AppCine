@@ -1,5 +1,6 @@
 import apiClient from '@/api/client';
 import Header from '@/components/Header';
+import cuponesData from '@/data/cupones.json';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -48,16 +49,15 @@ interface CardData {
 }
 
 interface Cupon {
-  id: string;
-  code: string;
-  scope: 'tickets' | 'candyshop' | 'both';
-  mode: 'fixed' | 'percent' | '2x1' | '3x2';
-  value?: number;
-  buyQuantity?: number;
-  payQuantity?: number;
-  premiumOnly: boolean;
-  minAmount?: number;
-  maxDiscount?: number;
+  codigo: string;
+  titulo: string;
+  descripcion: string;
+  objeto: 'ticket' | 'candyshop';
+  tipo: 'fijo' | 'porcentaje' | '2x1';
+  descuento: number | null;
+  vencimiento: string;
+  icono: string;
+  premium: boolean;
 }
 
 type Pelicula = {
@@ -84,12 +84,17 @@ const CarritoTickets: React.FC = () => {
   const [mostrarMetodosGuardados, setMostrarMetodosGuardados] = useState<boolean>(true);
   const [pelicula, setPelicula] = useState<Pelicula | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [guardarMetodo, setGuardarMetodo] = useState<boolean>(false);
 
   const [codigoCupon, setCodigoCupon] = useState<string>('');
   const [cuponAplicado, setCuponAplicado] = useState<Cupon | null>(null);
   const [descuentoAplicado, setDescuentoAplicado] = useState<number>(0);
   const [cargandoCupon, setCargandoCupon] = useState<boolean>(false);
+
+  const cupones: Cupon[] = cuponesData.cupones.map((c) => ({
+    ...c,
+    objeto: c.objeto as 'ticket' | 'candyshop',
+    tipo: c.tipo as 'fijo' | 'porcentaje' | '2x1',
+  }));
 
   const paymentMethods: PaymentMethod[] = [
     { id: 'visa', name: 'Tarjeta de crédito/débito', icon: 'card', type: 'card' },
@@ -100,119 +105,72 @@ const CarritoTickets: React.FC = () => {
     cargarMetodosGuardados();
   }, []);
 
-  useEffect(() => {
-  // Cada vez que el usuario cambia el tipo de método (visa / mercadopago)
-  // tratamos de preseleccionar uno guardado como "recomendado"
-  if (selectedPayment === 'visa' && tarjetasGuardadas.length > 0) {
-    seleccionarMetodoGuardado(0);
-    setGuardarMetodo(false); // ya es guardado
-  } else if (selectedPayment === 'mercadopago' && billeterasGuardadas.length > 0) {
-    seleccionarMetodoGuardado(0);
-    setGuardarMetodo(false);
-  } else {
-    // No hay métodos guardados para este tipo → que complete uno nuevo
-    setMetodoSeleccionado(-1);
-    setCardData({ number: '', expiry: '', cvv: '', name: '' });
-    setGuardarMetodo(true); // por defecto marcamos para guardar el nuevo
-  }
-}, [selectedPayment, tarjetasGuardadas, billeterasGuardadas]);
-
   const cargarMetodosGuardados = async () => {
     try {
       const metodos = await AsyncStorage.getItem(STORAGE_KEY);
       if (metodos) {
         const lista: MetodoPago[] = JSON.parse(metodos);
         setMetodosGuardados(lista);
-
-        const tarjetas = lista.filter(m => m.type === 'card');
-        const billeteras = lista.filter(m => m.type === 'wallet');
-
-        setTarjetasGuardadas(tarjetas);
-        setBilleterasGuardadas(billeteras);
-
-        // Si el usuario ya eligió un tipo de pago, mostramos la primera como "recomendada"
-        if (selectedPayment === 'visa' && tarjetas.length > 0) {
-          setMetodoSeleccionado(0);
-          setCardData({
-            number: tarjetas[0].numero,
-            expiry: tarjetas[0].fecha,
-            cvv: tarjetas[0].cvv,
-            name: `${tarjetas[0].nombre} ${tarjetas[0].apellido}`
-          });
-        } else if (selectedPayment === 'mercadopago' && billeteras.length > 0) {
-          setMetodoSeleccionado(0);
-          setCardData({
-            number: billeteras[0].numero,
-            expiry: billeteras[0].fecha,
-            cvv: billeteras[0].cvv,
-            name: `${billeteras[0].nombre} ${billeteras[0].apellido}`
-          });
-        }
+        setTarjetasGuardadas(lista.filter(m => m.type === 'card'));
+        setBilleterasGuardadas(lista.filter(m => m.type === 'wallet'));
       }
     } catch (error) {
       console.error('Error al cargar métodos guardados:', error);
     }
   };
 
-  
+  const validarCupon = async (cupon: Cupon): Promise<{ valido: boolean; mensaje?: string }> => {
+    const fechaVencimiento = new Date(cupon.vencimiento);
+    const fechaActual = new Date();
 
-  const calcularDescuento = (cupon: Cupon, subtotal: number, cantidadAsientos: number): number => {
-    switch (cupon.mode) {
-      case 'fixed': {
-        const base = cupon.value ?? 0;
-        let descuento = Math.min(base, subtotal);
-        if (cupon.maxDiscount != null) {
-          descuento = Math.min(descuento, cupon.maxDiscount);
+    if (fechaVencimiento < fechaActual) {
+      return { valido: false, mensaje: 'El cupón ha expirado' };
+    }
+
+    if (cupon.objeto !== 'ticket') {
+      return { valido: false, mensaje: 'Este cupón no es válido para entradas de cine' };
+    }
+
+    if (cupon.premium) {
+      try {
+        const estado = await AsyncStorage.getItem('estadoSuscripcion');
+        const esPremium = estado ? JSON.parse(estado).suscripto === true : false;
+        if (!esPremium) {
+          return { valido: false, mensaje: 'Este cupón es solo para usuarios Premium' };
         }
-        return descuento;
+      } catch {
+        return { valido: false, mensaje: 'Error al verificar suscripción del usuario' };
       }
+    }
 
-      case 'percent': {
-        const porcentaje = cupon.value ?? 0;
-        let descuento = (subtotal * porcentaje) / 100;
-        if (cupon.maxDiscount != null) {
-          descuento = Math.min(descuento, cupon.maxDiscount);
-        }
-        return descuento;
+    if (cupon.tipo === '2x1') {
+      const cantidadAsientos = asientos?.toString().split(',').length || 0;
+      if (cantidadAsientos < 2) {
+        return { valido: false, mensaje: 'Debes seleccionar al menos 2 asientos para usar este cupón' };
       }
+    }
 
-      case '2x1':
-      case '3x2': {
-        const buy = cupon.buyQuantity ?? (cupon.mode === '2x1' ? 2 : 3);
-        const pay = cupon.payQuantity ?? (cupon.mode === '2x1' ? 1 : 2);
+    return { valido: true };
+  };
 
-        if (buy <= 0 || pay <= 0 || pay > buy) return 0;
-        if (cantidadAsientos < buy) return 0;
+  const calcularDescuento = (cupon: Cupon, subtotal: number): number => {
+    switch (cupon.tipo) {
+      case 'fijo':
+        return Math.min(cupon.descuento || 0, subtotal);
 
+      case 'porcentaje':
+        return (subtotal * (cupon.descuento || 0)) / 100;
+
+      case '2x1': {
+        const cantidadAsientos = asientos?.toString().split(',').length || 0;
+        if (cantidadAsientos < 2) return 0;
+        const entradasGratis = Math.floor(cantidadAsientos / 2);
         const precioUnitario = subtotal / cantidadAsientos;
-        const promosAplicables = Math.floor(cantidadAsientos / buy);
-        const entradasGratis = promosAplicables * (buy - pay);
-        const descuento = precioUnitario * entradasGratis;
-
-        return cupon.maxDiscount != null ? Math.min(descuento, cupon.maxDiscount) : descuento;
+        return precioUnitario * entradasGratis;
       }
 
       default:
         return 0;
-    }
-  };
-
-  const describirCupon = (cupon: Cupon): string => {
-    switch (cupon.mode) {
-      case 'fixed':
-        return cupon.value != null
-          ? `Descuento fijo de $${cupon.value.toFixed(2)}`
-          : 'Descuento fijo';
-      case 'percent':
-        return cupon.value != null
-          ? `Descuento de ${cupon.value}% sobre el total`
-          : 'Descuento porcentual';
-      case '2x1':
-        return 'Promoción 2x1 en entradas';
-      case '3x2':
-        return 'Promoción 3x2 en entradas';
-      default:
-        return 'Cupón de descuento';
     }
   };
 
@@ -225,63 +183,34 @@ const CarritoTickets: React.FC = () => {
     setCargandoCupon(true);
 
     try {
-      const code = codigoCupon.trim().toUpperCase();
-      const cantidadAsientos = asientos?.toString().split(',').length || 0;
+      const cupon = cupones.find(c => c.codigo.toLowerCase() === codigoCupon.trim().toLowerCase());
+      
+      if (!cupon) {
+        Alert.alert('Error', 'Código de cupón inválido');
+        setCargandoCupon(false);
+        return;
+      }
+
+      const validacion = await validarCupon(cupon);
+      if (!validacion.valido) {
+        Alert.alert('Error', validacion.mensaje || 'Cupón no válido');
+        setCargandoCupon(false);
+        return;
+      }
+
       const subtotal = parseFloat(total as string);
-
-      const response = await apiClient.post('/coupons/validate', {
-        code,
-        purchaseType: 'tickets',
-      });
-
-      const data = response.data as {
-        valid: boolean;
-        reason?: string;
-        coupon?: Cupon;
-      };
-
-      if (!data.valid || !data.coupon) {
-        Alert.alert('Error', data.reason || 'Cupón no válido');
-        return;
-      }
-
-      const cupon = data.coupon;
-
-      if (cupon.minAmount != null && subtotal < cupon.minAmount) {
-        Alert.alert(
-          'Error',
-          `Este cupón requiere una compra mínima de $${cupon.minAmount.toFixed(2)}`
-        );
-        return;
-      }
-
-      const descuento = calcularDescuento(cupon, subtotal, cantidadAsientos);
-
-      if (descuento <= 0) {
-        Alert.alert(
-          'Error',
-          'Este cupón no se puede aplicar al total actual de entradas'
-        );
-        return;
-      }
+      const descuento = calcularDescuento(cupon, subtotal);
 
       setCuponAplicado(cupon);
       setDescuentoAplicado(descuento);
-
+      
       Alert.alert(
         '¡Cupón aplicado!',
-        `Cupón ${cupon.code} aplicado.\n${describirCupon(cupon)}\nDescuento: $${descuento.toFixed(2)}`
+        `${cupon.titulo} - ${cupon.descripcion}\nDescuento: $${descuento.toFixed(2)}`
       );
-    } catch (error: any) {
-      console.error('Error al aplicar cupón:', error);
-      const backendReason =
-        (error?.response?.data as any)?.reason ||
-        (error?.response?.data as any)?.error;
 
-      Alert.alert(
-        'Error',
-        backendReason || 'Error al aplicar el cupón'
-      );
+    } catch (error) {
+      Alert.alert('Error', 'Error al aplicar el cupón');
     } finally {
       setCargandoCupon(false);
     }
@@ -312,41 +241,6 @@ const CarritoTickets: React.FC = () => {
       cvv: '',
       name: ''
     });
-    setGuardarMetodo(true); // si elige "nuevo método", por defecto se va a guardar
-  };
-
-  const guardarMetodoSiEsNuevo = async () => {
-    // Solo guarda si:
-    // - el usuario tiene el checkbox activado
-    // - NO está usando un método ya guardado (metodoSeleccionado === -1)
-    if (!guardarMetodo || metodoSeleccionado !== -1) return;
-
-    // Sacamos nombre y apellido del campo "name"
-    const [nombre, ...resto] = cardData.name.split(' ');
-    const apellido = resto.join(' ');
-
-    const nuevoMetodo: MetodoPago = {
-      nombre: nombre || '',
-      apellido: apellido || '',
-      numero: cardData.number,
-      fecha: cardData.expiry,
-      cvv: cardData.cvv,
-      type: selectedPayment === 'visa' ? 'card' : 'wallet',
-    };
-
-    try {
-      const actual = await AsyncStorage.getItem(STORAGE_KEY);
-      const lista: MetodoPago[] = actual ? JSON.parse(actual) : [];
-      lista.push(nuevoMetodo);
-
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
-
-      setMetodosGuardados(lista);
-      setTarjetasGuardadas(lista.filter(m => m.type === 'card'));
-      setBilleterasGuardadas(lista.filter(m => m.type === 'wallet'));
-    } catch (error) {
-      console.error('Error guardando método de pago:', error);
-    }
   };
 
   const movieIdStr = Array.isArray(id) ? id[0] : id;
@@ -364,7 +258,7 @@ const CarritoTickets: React.FC = () => {
         fechaCompra: new Date().toISOString(),
         subtotal: subtotal,
         descuento: descuentoAplicado,
-        cuponUsado: cuponAplicado?.code || null,
+        cuponUsado: cuponAplicado?.codigo || null,
         precio: totalFinal,
         metodo: selectedPayment === 'visa' ? 'Tarjeta' : 'Billetera',
         ticketId: ticketId || null,
@@ -468,8 +362,6 @@ const CarritoTickets: React.FC = () => {
       return;
     }
 
-    await guardarMetodoSiEsNuevo();
-
     // showtimeId que viene desde Asientos
     const sId = Array.isArray(showtimeId) ? showtimeId[0] : showtimeId;
     if (!sId) {
@@ -567,12 +459,8 @@ const CarritoTickets: React.FC = () => {
           <View style={styles.cuponAplicadoInfo}>
             <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
             <View style={styles.cuponAplicadoTexto}>
-              <Text style={styles.cuponAplicadoTitulo}>
-                Cupón aplicado: {cuponAplicado.code}
-              </Text>
-              <Text style={styles.cuponAplicadoDescripcion}>
-                {describirCupon(cuponAplicado)}
-              </Text>
+              <Text style={styles.cuponAplicadoTitulo}>{cuponAplicado.titulo}</Text>
+              <Text style={styles.cuponAplicadoDescripcion}>{cuponAplicado.descripcion}</Text>
               <Text style={styles.cuponAplicadoDescuento}>
                 Descuento: ${descuentoAplicado.toFixed(2)}
               </Text>
@@ -729,18 +617,6 @@ const CarritoTickets: React.FC = () => {
           </>
         )}
 
-        <View style={styles.guardarMetodoContainer}>
-          <TouchableOpacity
-            style={[styles.checkbox, guardarMetodo && styles.checkboxChecked]}
-            onPress={() => setGuardarMetodo(prev => !prev)}
-          >
-            {guardarMetodo && <View style={styles.checkboxInner} />}
-          </TouchableOpacity>
-          <Text style={styles.guardarMetodoText}>
-            Guardar este método para futuras compras
-          </Text>
-        </View>
-
         {metodoSeleccionado >= 0 && (
           <View style={styles.datosAutocompletados}>
             <Text style={styles.datosAutocompletadosTitle}>Datos seleccionados:</Text>
@@ -818,7 +694,7 @@ const CarritoTickets: React.FC = () => {
           {cuponAplicado && (
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryText, styles.discountText]}>
-                Descuento ({cuponAplicado.code})
+                Descuento ({cuponAplicado.codigo})
               </Text>
               <Text style={[styles.summaryPrice, styles.discountPrice]}>
                 -${descuentoAplicado.toFixed(2)}
@@ -856,7 +732,7 @@ const CarritoTickets: React.FC = () => {
             <Text style={styles.successTitle}>¡Compra exitosa!</Text>
             <Text style={styles.successMessage}>
               Tus entradas han sido compradas correctamente
-              {cuponAplicado && `\n¡Cupón ${cuponAplicado.code} aplicado con éxito!`}
+              {cuponAplicado && `\n¡Cupón ${cuponAplicado.codigo} aplicado con éxito!`}
             </Text>
             <Text style={styles.countdownText}>
               Se cerrará automáticamente en 3 segundos
@@ -1266,34 +1142,6 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     fontStyle: 'italic',
-  },
-  guardarMetodoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#888',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  checkboxChecked: {
-    backgroundColor: '#ff4757', // o el color primario que uses
-  },
-  checkboxInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-    backgroundColor: 'white',
-  },
-  guardarMetodoText: {
-    fontSize: 14,
-    color: '#333',
   },
 });
 

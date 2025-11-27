@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv';
+dotenv.config();
 
 import cors from 'cors';
 import express from 'express';
@@ -10,31 +11,28 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from './config/firebase';
 
 // Importar rutas
-import candyOrdersRoutes from './routes/candyOrders';
-import candyProductsRoutes from './routes/candyProducts';
 import checkoutTicketRoutes from './routes/checkoutTicket';
-import couponsRoutes from './routes/coupons';
 import dniRoutes from './routes/dni';
-import newsRoutes from './routes/news';
-import paymentsMpRoutes from './routes/paymentsMP';
 import showtimeRoutes from './routes/showtimes';
 import ticketRoutes from './routes/tickets';
 import userRoutes from './routes/users';
 import verificationRoutes from './routes/verification';
+import candyProductsRoutes from './routes/candyProducts';
+import candyOrdersRoutes from './routes/candyOrders';
+import paymentsMpRoutes from './routes/paymentsMP';
 
 // Importar rutas de admin
+import adminUsersRoutes from './routes/admin/users';
 import adminCandyOrdersRoutes from './routes/admin/candyOrders';
-import adminCandyProductsRoutes from './routes/admin/candyProducts';
-import adminCouponsRoutes from './routes/admin/coupons';
 import adminDashboardRoutes from './routes/admin/dashboard';
+import adminCandyProductsRoutes from './routes/admin/candyProducts';
 import adminShowtimesRoutes from './routes/admin/showtimes';
 import adminTicketsRoutes from './routes/admin/tickets';
-import adminUsersRoutes from './routes/admin/users';
+import adminCouponsRoutes from './routes/admin/coupons';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/logger';
-dotenv.config();
 
 // Crear app Express
 const app = express();
@@ -63,8 +61,6 @@ app.use('/checkout-ticket', checkoutTicketRoutes);
 app.use('/candy-products', candyProductsRoutes);
 app.use('/candy-orders', candyOrdersRoutes);
 app.use('/payments/mp', paymentsMpRoutes);
-app.use('/coupons', couponsRoutes);
-app.use('/news', newsRoutes);
 
 // Rutas de admin (requieren autenticación + rol admin)
 app.use('/admin/users', adminUsersRoutes);
