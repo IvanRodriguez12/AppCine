@@ -240,7 +240,9 @@ router.post('/login', asyncHandler(async (req: any, res: any) => {
       accountLevel: userData?.accountLevel,
       isEmailVerified: userData?.isEmailVerified,
       dniUploaded: userData?.dniUploaded,
-      faceVerified: userData?.faceVerified
+      faceVerified: userData?.faceVerified,
+      isPremium: userData?.isPremium ?? false,
+      premiumUntilAt: userData?.premiumUntilAt ?? null
     }
   });
 }));

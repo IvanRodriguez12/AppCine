@@ -1,6 +1,7 @@
 // functions/src/services/paymentsMp.ts
 import { db } from '../config/firebase';
 import { mpPayment, mpPreference } from '../config/mercadoPago';
+import { PREMIUM_PLAN } from '../config/subscriptionPlan'; 
 
 interface CandyItemInput {
   productId: string;
@@ -66,12 +67,12 @@ export async function crearPreferenciaCandyMp(input: CreateCandyPreferenceInput)
     });
 
     metadataItems.push({
-  productId,
-  tamanio,
-  cantidad: quantity,
-  precioUnitario: unitPrice,
-  nombre: data.nombre ?? 'Producto Candy'
-});
+      productId,
+      tamanio,
+      cantidad: quantity,
+      precioUnitario: unitPrice,
+      nombre: data.nombre ?? 'Producto Candy'
+    });
   }
 
   const notificationUrl =
@@ -144,7 +145,7 @@ export async function crearPreferenciaTicketMp(
     process.env.MP_WEBHOOK_URL ||
     'https://webhook.site/14045216-ec2d-4875-b683-9b49d9421476';
 
-   const body = {
+  const body = {
     items: [
       {
         id: `ticket-${showtimeId}`, // 👈 línea nueva para satisfacer el tipo Items
@@ -169,6 +170,62 @@ export async function crearPreferenciaTicketMp(
       asientos,
       total,
       description: description ?? 'Compra de entradas de cine',
+    },
+  };
+
+  const preference = await mpPreference.create({ body });
+
+  return {
+    id: preference.id,
+    init_point: (preference as any).init_point,
+    sandbox_init_point: (preference as any).sandbox_init_point,
+  };
+}
+
+/**
+ * Preferencia para suscripción Premium
+ */
+interface SubscriptionPreferenceInput {
+  userId: string;
+}
+
+export async function crearPreferenciaSubscriptionMp(
+  input: SubscriptionPreferenceInput
+) {
+  const { userId } = input;
+
+  if (!userId) {
+    throw new Error('userId es obligatorio');
+  }
+
+  const notificationUrl =
+    process.env.MP_WEBHOOK_URL ||
+    'https://webhook.site/14045216-ec2d-4875-b683-9b49d9421476';
+
+  const body = {
+    items: [
+      {
+        id: PREMIUM_PLAN.id,
+        title: PREMIUM_PLAN.name,
+        description: PREMIUM_PLAN.description,
+        quantity: 1,
+        unit_price: PREMIUM_PLAN.price,
+        currency_id: 'ARS',
+      },
+    ],
+    notification_url: notificationUrl,
+    back_urls: {
+      success: 'https://example.com/mp/subscription/success',
+      failure: 'https://example.com/mp/subscription/failure',
+      pending: 'https://example.com/mp/subscription/pending',
+    },
+    auto_return: 'approved' as const,
+    statement_descriptor: 'CineApp Premium',
+    metadata: {
+      userId,
+      tipo: 'subscription',
+      planId: PREMIUM_PLAN.id,
+      months: PREMIUM_PLAN.months,
     },
   };
 

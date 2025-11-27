@@ -6,21 +6,16 @@ import {
   crearPreferenciaCandyMp,
   crearPreferenciaTicketMp,
   obtenerPagoMp,
+  crearPreferenciaSubscriptionMp,   
 } from '../services/paymentsMP';
+import { db } from '../config/firebase'; 
+import { PREMIUM_PLAN } from '../config/subscriptionPlan'; 
 
 const router = Router();
 
 /**
  * POST /payments/mp/create-preference
- * Body esperado:
- * {
- *   "userId": "abc123",
- *   "items": [
- *     { "productId": "candyId1", "tamanio": "mediano", "quantity": 2 },
- *     { "productId": "candyId2", "tamanio": "único", "quantity": 1 }
- *   ],
- *   "description": "Opcional"
- * }
+ * Candy
  */
 router.post('/create-preference', async (req, res) => {
   try {
@@ -34,6 +29,10 @@ router.post('/create-preference', async (req, res) => {
   }
 });
 
+/**
+ * POST /payments/mp/create-ticket-preference
+ * Tickets
+ */
 router.post('/create-ticket-preference', async (req, res) => {
   try {
     const { userId, showtimeId, asientos, total, description } = req.body;
@@ -56,6 +55,25 @@ router.post('/create-ticket-preference', async (req, res) => {
 });
 
 /**
+ * POST /payments/mp/create-subscription-preference
+ * Suscripción Premium
+ */
+router.post('/create-subscription-preference', async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    const pref = await crearPreferenciaSubscriptionMp({ userId });
+
+    return res.status(201).json(pref);
+  } catch (error: any) {
+    console.error('Error creando preferencia de suscripción MP:', error);
+    return res
+      .status(500)
+      .json({ error: 'No se pudo crear la preferencia de pago para suscripción' });
+  }
+});
+
+/**
  * POST /payments/mp/webhook
  * Mercado Pago envía notificaciones acá
  */
@@ -65,9 +83,6 @@ router.post('/webhook', async (req, res) => {
     console.log('Query:', req.query);
     console.log('Body:', JSON.stringify(req.body));
 
-    // Formatos típicos:
-    // ?type=payment&data.id=123
-    // ?topic=payment&id=123
     const paymentId =
       (req.query['data.id'] as string) ||
       (req.query.id as string) ||
@@ -83,7 +98,7 @@ router.post('/webhook', async (req, res) => {
       return res.status(200).send('ignored');
     }
 
-    // Consultar el pago en MP
+    // Leer pago real de MercadoPago
     const pago: any = await obtenerPagoMp(paymentId);
 
     console.log(
@@ -93,15 +108,14 @@ router.post('/webhook', async (req, res) => {
       pago.status_detail
     );
 
-    // Log extra para ver qué nos está mandando MP
     console.log('=== METADATA PAGO ===');
     console.log(JSON.stringify(pago.metadata, null, 2));
 
-    // Si el pago está aprobado y trae metadata, procesamos
+    // Procesamiento
     if (pago.status === 'approved' && pago.metadata) {
       const metadata = pago.metadata as any;
 
-      // 1) Compras de Candy
+      // 1) Candy
       if (metadata?.tipo === 'candy') {
         try {
           const userId = metadata.userId || metadata.user_id;
@@ -110,10 +124,7 @@ router.post('/webhook', async (req, res) => {
             !Array.isArray(metadata.items) ||
             metadata.items.length === 0
           ) {
-            console.warn(
-              'Metadata de Candy incompleta en pago MP:',
-              metadata
-            );
+            console.warn('Metadata de Candy incompleta:', metadata);
           } else {
             await crearOrdenCandyDesdePagoMp({
               userId,
@@ -123,20 +134,14 @@ router.post('/webhook', async (req, res) => {
               feeServicio: metadata.feeServicio ?? 0,
             });
 
-            console.log(
-              `Orden de Candy creada desde pago MP. paymentId=${pago.id}`
-            );
+            console.log(`Orden de Candy creada. paymentId=${pago.id}`);
           }
         } catch (ordenError) {
-          console.error(
-            'Error creando orden de Candy desde webhook MP:',
-            ordenError
-          );
-          // Igual respondemos 200 para que MP no reintente infinitamente
+          console.error('Error creando orden de Candy:', ordenError);
         }
       }
 
-      // 2) Compras de Tickets
+      // 2) Tickets
       else if (metadata?.tipo === 'ticket') {
         try {
           const { userId, showtimeId, asientos, total } = metadata;
@@ -148,10 +153,7 @@ router.post('/webhook', async (req, res) => {
             asientos.length === 0 ||
             typeof total !== 'number'
           ) {
-            console.warn(
-              'Metadata de ticket incompleta en pago MP:',
-              metadata
-            );
+            console.warn('Metadata de ticket incompleta:', metadata);
           } else {
             const { ticketId } = await reservarAsientos(
               showtimeId,
@@ -166,17 +168,61 @@ router.post('/webhook', async (req, res) => {
             );
           }
         } catch (ticketError) {
-          console.error('Error creando ticket desde webhook MP:', ticketError);
-          // Igual respondemos 200 para que MP no reintente infinitamente
+          console.error('Error creando ticket:', ticketError);
+        }
+      }
+
+      // 3) NUEVO: Suscripción Premium
+      else if (metadata?.tipo === 'subscription') {
+        try {
+          const userId = metadata.userId || metadata.user_id;
+          const months =
+            typeof metadata.months === 'number' ? metadata.months : PREMIUM_PLAN.months;
+
+          if (!userId) {
+            console.warn('Metadata de suscripción sin userId');
+          } else {
+            const userRef = db.collection('users').doc(userId);
+            const userSnap = await userRef.get();
+
+            let baseDate = new Date();
+
+            // Extender si ya tenía premium activo
+            if (userSnap.exists) {
+              const data = userSnap.data() as any;
+              if (data.premiumUntilAt) {
+                const currentUntil = new Date(data.premiumUntilAt);
+                if (!isNaN(currentUntil.getTime()) && currentUntil > baseDate) {
+                  baseDate = currentUntil;
+                }
+              }
+            }
+
+            // Sumar meses del plan
+            const newUntil = new Date(baseDate);
+            newUntil.setMonth(newUntil.getMonth() + months);
+
+            await userRef.update({
+              isPremium: true,
+              premiumUntilAt: newUntil.toISOString(),
+              accountLevel: 'premium',
+              updatedAt: new Date().toISOString(),
+            });
+
+            console.log(
+              `Usuario ${userId} actualizado a PREMIUM hasta ${newUntil.toISOString()}`
+            );
+          }
+        } catch (subError) {
+          console.error('Error procesando suscripción premium:', subError);
         }
       }
     }
 
-    // Importante: MP puede reenviar el mismo webhook varias veces → siempre responder 200
     return res.status(200).send('ok');
+
   } catch (error) {
     console.error('Error procesando webhook MP:', error);
-    // Igual respondemos 200 para que MP no siga reintentando indefinidamente
     return res.status(200).send('ok');
   }
 });

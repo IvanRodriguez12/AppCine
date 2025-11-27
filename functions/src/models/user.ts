@@ -52,6 +52,10 @@ export interface User {
   // Términos y condiciones
   acceptedTerms: boolean;
   acceptedTermsAt: string;
+
+  // Suscripción Premium
+  isPremium: boolean;
+  premiumUntilAt: string | null;
   
   // Timestamps
   createdAt: string;
@@ -153,6 +157,8 @@ export const createUserInitialData = (
     watchlist: [],
     acceptedTerms: true,
     acceptedTermsAt: now,
+    isPremium: false,
+    premiumUntilAt: null,
     createdAt: now,
     updatedAt: now,
     lastLoginAt: null
