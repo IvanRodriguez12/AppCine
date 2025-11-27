@@ -66,6 +66,7 @@ export const CANDY_ENDPOINTS = {
 // Endpoints de Pagos con MercadoPago
 export const PAYMENT_ENDPOINTS = {
   CREATE_PREFERENCE: '/payments/mp/create-preference',
+  CREATE_TICKET_PREFERENCE: '/payments/mp/create-ticket-preference',
   WEBHOOK: '/payments/mp/webhook',
 };
 

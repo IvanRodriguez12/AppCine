@@ -1,5 +1,7 @@
 import apiClient from '@/api/client';
+import { PAYMENT_ENDPOINTS } from '@/api/endpoints';
 import Header from '@/components/Header';
+import { useAuth } from '@/context/authContext';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -68,6 +71,7 @@ type Pelicula = {
 const CarritoTickets: React.FC = () => {
   const { id, fecha, hora, asientos, total, showtimeId } = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
   
   const [selectedPayment, setSelectedPayment] = useState<string>('');
   const [cardData, setCardData] = useState<CardData>({
@@ -416,7 +420,7 @@ const CarritoTickets: React.FC = () => {
   };
 
   const validateCard = (): boolean => {
-    if (selectedPayment === 'visa' || selectedPayment === 'mercadopago') {
+    if (selectedPayment === 'visa') {
       const { number, expiry, cvv, name } = cardData;
 
       const cardNumber = number.replace(/\s/g, '');
@@ -464,11 +468,10 @@ const CarritoTickets: React.FC = () => {
       return;
     }
 
-    if (!validateCard()) {
+    // Solo validamos datos de tarjeta cuando el pago es con tarjeta
+    if (selectedPayment === 'visa' && !validateCard()) {
       return;
     }
-
-    await guardarMetodoSiEsNuevo();
 
     // showtimeId que viene desde Asientos
     const sId = Array.isArray(showtimeId) ? showtimeId[0] : showtimeId;
@@ -480,7 +483,6 @@ const CarritoTickets: React.FC = () => {
       return;
     }
 
-    // Asientos seleccionados que vienen como string "A1, A2, B3"
     const asientosRaw = Array.isArray(asientos) ? asientos[0] : asientos;
     const listaAsientos =
       (asientosRaw || '')
@@ -498,32 +500,80 @@ const CarritoTickets: React.FC = () => {
     }
 
     const subtotal = parseFloat(total as string);
-    const totalFinal = subtotal - descuentoAplicado + 2; // mismo cálculo que usarás como precio final
+    const totalFinal = subtotal - descuentoAplicado + 2; // mismo cálculo que ya usabas
 
     try {
-      // Llamar al backend para crear el ticket y reservar asientos
-      const response = await apiClient.post('/checkout-ticket', {
-        showtimeId: sId,
-        asientos: listaAsientos,
-        total: totalFinal,
-        metodoPago: selectedPayment === 'visa' ? 'tarjeta' : 'billetera',
-      });
+      // 💳 FLUJO 1: Pago directo con tarjeta → backend genera ticket al instante
+      if (selectedPayment === 'visa') {
+        const response = await apiClient.post('/checkout-ticket', {
+          showtimeId: sId,
+          asientos: listaAsientos,
+          total: totalFinal,
+          metodoPago: 'tarjeta',
+        });
 
-      const { ticketId, qrCode, ticketToken } = response.data || {};
-      console.log('Ticket generado:', ticketId, ticketToken);
+        const { ticketId, qrCode, ticketToken } = response.data || {};
+        console.log('Ticket generado:', ticketId, ticketToken);
 
-      // Guardar la compra en local incluyendo ticketId/qrCode
-      await guardarCompra(ticketId, qrCode);
+        // Guardar la compra en local incluyendo ticketId/qrCode
+        await guardarCompra(ticketId, qrCode);
 
-      // Mostrar modal de éxito y volver al menú
-      setShowSuccessModal(true);
+        // Mostrar modal de éxito y volver al menú
+        setShowSuccessModal(true);
 
-      setTimeout(() => {
-        setShowSuccessModal(false);
         setTimeout(() => {
-          router.replace('menu/menuPrincipal');
-        }, 200);
-      }, 3000);
+          setShowSuccessModal(false);
+          router.push('../menuPrincipal');
+        }, 3000);
+
+        return;
+      }
+
+      // 💙 FLUJO 2: Pago con Mercado Pago (wallet)
+      if (selectedPayment === 'mercadopago') {
+        if (!user?.uid) {
+          Alert.alert(
+            'Error',
+            'No se encontró el usuario autenticado. Volvé a iniciar sesión e intentá nuevamente.'
+          );
+          return;
+        }
+
+        const descripcionBase = pelicula
+          ? `Entradas para ${pelicula.title} (${listaAsientos.length} asiento/s)`
+          : `Entradas de cine (${listaAsientos.length} asiento/s)`;
+
+        const mpResponse = await apiClient.post(
+          PAYMENT_ENDPOINTS.CREATE_TICKET_PREFERENCE,
+          {
+            userId: user.uid,
+            showtimeId: sId,
+            asientos: listaAsientos,
+            total: totalFinal,
+            description: descripcionBase,
+          }
+        );
+
+        const { init_point } = mpResponse.data || {};
+
+        if (!init_point) {
+          Alert.alert(
+            'Error',
+            'No se pudo obtener el enlace de pago de Mercado Pago. Intentá nuevamente.'
+          );
+          return;
+        }
+
+        // Abrir checkout de Mercado Pago en el navegador
+        await Linking.openURL(init_point);
+
+        Alert.alert(
+          'Redirigiendo a Mercado Pago',
+          'Una vez aprobado el pago, tus entradas se generarán automáticamente y quedarán asociadas a tu cuenta.'
+        );
+
+        return;
+      }
     } catch (error: any) {
       console.error('Error al finalizar pago / generar ticket:', error);
 
