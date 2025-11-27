@@ -1,4 +1,4 @@
-package com.cineapp.app
+package com.cineapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
