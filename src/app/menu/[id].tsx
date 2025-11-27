@@ -14,8 +14,8 @@ import {
   View,
 } from 'react-native';
 
-const REVIEWS_KEY = '@reviews_peliculas';
-const COMPRAS_KEY = 'compras_usuario';
+import { useAuth } from '@/context/authContext';
+import reviewsApi from '@/services/reviewsApi';
 
 type Pelicula = {
   id: number;
@@ -34,50 +34,43 @@ type CastMember = {
   profile_path: string | null;
 };
 
-type Review = {
-  movieId: string;
-  movieTitle: string;
-  rating: number;
-  body: string;
-  createdAt: string;
-};
-
 type CompraGuardada = {
   tipo: string;
   pelicula: string;
-  fecha: string | string[];
-  hora: string | string[];
+  fecha?: string | string[];
+  hora?: string | string[];
   movieId?: string | null;
 };
 
-const PeliculaSeleccionada = () => {
+const PeliculaSeleccionada: React.FC = () => {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
 
-  const movieId = Array.isArray(id) ? id[0] : id;
+  const movieIdStr = Array.isArray(id) ? id?.[0] : (id as string | undefined);
+  const movieIdNum = movieIdStr ? Number(movieIdStr) : null;
 
   const [pelicula, setPelicula] = useState<Pelicula | null>(null);
   const [cast, setCast] = useState<CastMember[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Reviews
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [hasReview, setHasReview] = useState(false);
   const [canReview, setCanReview] = useState(false);
 
+  // --- Cargar datos de película + cast desde TMDB ---
   useEffect(() => {
     const fetchData = async () => {
-      if (!movieId) return;
+      if (!movieIdNum) return;
 
       try {
         setLoading(true);
 
         const [res1, res2] = await Promise.all([
           fetch(
-            `https://api.themoviedb.org/3/movie/${movieId}?language=es-AR&api_key=${TMDB_API_KEY}`
+            `https://api.themoviedb.org/3/movie/${movieIdNum}?language=es-AR&api_key=${TMDB_API_KEY}`,
           ),
           fetch(
-            `https://api.themoviedb.org/3/movie/${movieId}/credits?language=es-AR&api_key=${TMDB_API_KEY}`
+            `https://api.themoviedb.org/3/movie/${movieIdNum}/credits?language=es-AR&api_key=${TMDB_API_KEY}`,
           ),
         ]);
 
@@ -94,66 +87,75 @@ const PeliculaSeleccionada = () => {
     };
 
     fetchData();
-  }, [movieId]);
+  }, [movieIdNum]);
 
-  // Cargar reviews + comprobar si el usuario puede dejar review
+  // --- Cargar flags: hasReview (API Python) + canReview (compras) ---
   useEffect(() => {
-    const loadReviewsAndRights = async () => {
-      if (!movieId) return;
+    const loadReviewFlags = async () => {
+      if (!movieIdNum || !movieIdStr || !pelicula) {
+        setHasReview(false);
+        setCanReview(false);
+        return;
+      }
 
       try {
-        // 1) Reviews
-        const raw = await AsyncStorage.getItem(REVIEWS_KEY);
-        const allReviews: Review[] = raw ? JSON.parse(raw) : [];
-        const movieReviews = allReviews.filter(
-          (r) => r.movieId === movieId.toString()
-        );
-        setReviews(movieReviews);
-        setHasReview(movieReviews.length > 0);
+        // 1) ¿El usuario ya tiene review de esta peli?
+        let userHasReview = false;
+        if (user) {
+          const userReviews = await reviewsApi.getByUser(user.uid);
+          userHasReview = userReviews.some(
+            (r) => r.movie_id === movieIdNum,
+          );
+        }
+        setHasReview(userHasReview);
 
-        // 2) Compras (para saber si vio la peli)
-        const comprasRaw = await AsyncStorage.getItem(COMPRAS_KEY);
+        // 2) ¿Tiene una entrada para esta peli y ya fue la función?
+        const comprasRaw = await AsyncStorage.getItem('compras_usuario');
         const compras: CompraGuardada[] = comprasRaw
           ? JSON.parse(comprasRaw)
           : [];
 
-        const ahora = new Date().getTime();
-        const haVisto = compras.some((c) => {
+        const ahora = Date.now();
+        const puede = compras.some((c) => {
           if (c.tipo !== 'Entrada de cine') return false;
 
-          // Comparamos por movieId si existe, si no por título
           const coincideMovieId =
-            c.movieId && c.movieId.toString() === movieId.toString();
-          const coincideTitulo =
-            pelicula && c.pelicula === pelicula.title;
+            c.movieId && c.movieId.toString() === movieIdStr;
+          const coincideTitulo = c.pelicula === pelicula.title;
 
           if (!coincideMovieId && !coincideTitulo) return false;
 
-          // Si no tenemos fecha/hora, igual lo consideramos válido
+          // Si no tenemos fecha/hora, por simplicidad lo aceptamos como visto
           if (!c.fecha || !c.hora) return true;
 
           const fechaStr = Array.isArray(c.fecha) ? c.fecha[0] : c.fecha;
           const horaStr = Array.isArray(c.hora) ? c.hora[0] : c.hora;
 
-          // Esperamos formato 'YYYY-MM-DD' y 'HH:mm'
+          if (!fechaStr || !horaStr) return true;
+
           const [y, m, d] = fechaStr.split('-').map(Number);
           const [hh, mm] = horaStr.split(':').map(Number);
 
-          if (!y || !m || !d || isNaN(hh) || isNaN(mm)) return true; // no rompemos
+          if (!y || !m || !d || Number.isNaN(hh) || Number.isNaN(mm)) {
+            return true;
+          }
 
-          const fechaHora = new Date(y, m - 1, d, hh, mm).getTime();
-          return fechaHora <= ahora;
+          const ts = new Date(y, m - 1, d, hh, mm).getTime();
+          return ts <= ahora; // solo si el horario ya pasó
         });
 
-        setCanReview(haVisto);
+        setCanReview(puede);
       } catch (e) {
-        console.error('Error cargando reviews/compras:', e);
+        console.error('Error cargando estado de reviews:', e);
+        setHasReview(false);
         setCanReview(false);
       }
     };
 
-    loadReviewsAndRights();
-  }, [movieId, pelicula]);
+    if (pelicula) {
+      loadReviewFlags();
+    }
+  }, [movieIdNum, movieIdStr, pelicula, user]);
 
   const esProximamente = (() => {
     if (!pelicula?.release_date) return false;
@@ -163,12 +165,12 @@ const PeliculaSeleccionada = () => {
   })();
 
   const handleReviewPress = () => {
-    if (!movieId || !pelicula) return;
+    if (!movieIdNum || !pelicula) return;
 
     router.push({
       pathname: '/menu/reviews/escribir',
       params: {
-        movieId: movieId.toString(),
+        movieId: movieIdNum.toString(),
         title: pelicula.title,
       },
     });
@@ -221,12 +223,12 @@ const PeliculaSeleccionada = () => {
         </View>
       </View>
 
-      {/* Botón Comprar / Review */}
+      {/* Botones de acciones */}
       {!esProximamente && (
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.buyButton}
-            onPress={() => router.push(`/menu/compra/${movieId}`)}
+            onPress={() => router.push(`/menu/compra/${movieIdStr}`)}
           >
             <Text style={styles.buyButtonText}>Comprar tickets</Text>
           </TouchableOpacity>
@@ -241,12 +243,10 @@ const PeliculaSeleccionada = () => {
               </Text>
             </TouchableOpacity>
           )}
-
+  
           <TouchableOpacity
             style={styles.reviewButton}
-            onPress={() =>
-              router.push(`/menu/reviews/${movieId}`)
-            }
+            onPress={() => router.push(`/menu/reviews/${movieIdStr}`)}
           >
             <Text style={styles.reviewButtonText}>Ver reviews</Text>
           </TouchableOpacity>
@@ -255,8 +255,8 @@ const PeliculaSeleccionada = () => {
 
       {!canReview && !esProximamente && (
         <Text style={styles.reviewHint}>
-          Podrás dejar una review cuando hayas visto esta película (y tengas una
-          entrada registrada).
+          Podrás dejar una review cuando hayas visto esta película y tengas una
+          entrada registrada cuyo horario ya haya pasado.
         </Text>
       )}
 
@@ -339,13 +339,15 @@ const styles = StyleSheet.create({
   chipText: { color: 'white', fontSize: 12 },
   actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     paddingHorizontal: 16,
     marginTop: 12,
     justifyContent: 'center',
   },
   buyButton: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: '45%',
     backgroundColor: '#ff2b2b',
     paddingVertical: 12,
     borderRadius: 10,
@@ -353,7 +355,8 @@ const styles = StyleSheet.create({
   },
   buyButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   reviewButton: {
-    flex: 1,
+    flexGrow: 1,
+    minWidth: '45%',
     backgroundColor: '#333',
     paddingVertical: 12,
     borderRadius: 10,
@@ -402,23 +405,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
   },
-  reviewCard: {
-    backgroundColor: '#1f1f1f',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 8,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  reviewDate: { color: '#999', fontSize: 11 },
-  reviewBody: { color: 'white', fontSize: 14, marginTop: 6 },
 });
 
 export default PeliculaSeleccionada;

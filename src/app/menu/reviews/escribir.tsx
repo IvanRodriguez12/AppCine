@@ -1,7 +1,5 @@
 // src/app/menu/reviews/escribir.tsx
-import Header from '@/components/Header';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -14,129 +12,129 @@ import {
   View,
 } from 'react-native';
 
-const REVIEWS_KEY = '@reviews_peliculas';
-
-type Review = {
-  movieId: string;
-  movieTitle: string;
-  rating: number;
-  body: string;
-  createdAt: string;
-};
+import Header from '@/components/Header';
+import { useAuth } from '@/context/authContext';
+import reviewsApi from '@/services/reviewsApi';
 
 const EscribirReview: React.FC = () => {
-  const params = useLocalSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{
+    movieId?: string;
+    title?: string;
+  }>();
 
-  // Aceptamos tanto movieId como id (por si en algún lugar lo pasan distinto)
-  const rawMovieId = (params.movieId ?? params.id) as string | string[] | undefined;
-  const rawTitle = params.title as string | string[] | undefined;
+  const movieIdNumber = params.movieId ? Number(params.movieId) : null;
+  const movieTitle = params.title || 'Película';
 
-  const movieIdStr = Array.isArray(rawMovieId) ? rawMovieId[0] : rawMovieId;
-  const movieTitle = Array.isArray(rawTitle) ? rawTitle[0] : rawTitle;
-
+  const [contenido, setContenido] = useState('');
   const [rating, setRating] = useState(0);
-  const [body, setBody] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
+  const [reviewId, setReviewId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const isEditing = reviewId !== null;
 
   useEffect(() => {
-    const loadExistingReview = async () => {
-      if (!movieIdStr) return;
+    const cargarReviewExistente = async () => {
+      if (!user || !movieIdNumber) return;
       try {
-        const raw = await AsyncStorage.getItem(REVIEWS_KEY);
-        const all: Review[] = raw ? JSON.parse(raw) : [];
-        const existing = all.find((r) => r.movieId === movieIdStr);
-        if (existing) {
-          setRating(existing.rating);
-          setBody(existing.body);
-          setIsEditing(true);
+        const userReviews = await reviewsApi.getByUser(user.uid);
+        const existente = userReviews.find(
+          (r) => r.movie_id === movieIdNumber,
+        );
+        if (existente) {
+          setReviewId(existente.id);
+          setRating(existente.rating);
+          setContenido(existente.comment || '');
         }
       } catch (e) {
         console.error('Error cargando review existente:', e);
       }
     };
-    loadExistingReview();
-  }, [movieIdStr]);
+    cargarReviewExistente();
+  }, [user, movieIdNumber]);
 
-  const handleSave = async () => {
-    if (!movieIdStr) {
+  const sendReview = async () => {
+    if (!user) {
+      Alert.alert(
+        'Iniciar sesión',
+        'Debes iniciar sesión para dejar una review.',
+      );
+      return;
+    }
+
+    if (!movieIdNumber) {
       Alert.alert('Error', 'No se pudo identificar la película.');
       return;
     }
 
     if (rating < 1 || rating > 5) {
-      Alert.alert('Revisión', 'Debes seleccionar una puntuación entre 1 y 5 estrellas.');
+      Alert.alert(
+        'Revisión',
+        'Seleccioná una puntuación entre 1 y 5 estrellas.',
+      );
       return;
     }
 
-    if (!body.trim()) {
+    if (!contenido.trim()) {
       Alert.alert('Revisión', 'No podés dejar la review vacía.');
       return;
     }
 
+    setLoading(true);
     try {
-      const raw = await AsyncStorage.getItem(REVIEWS_KEY);
-      const all: Review[] = raw ? JSON.parse(raw) : [];
-
-      const now = new Date().toISOString();
-      const idx = all.findIndex((r) => r.movieId === movieIdStr);
-
-      const finalTitle = movieTitle?.toString() || 'Película';
-
-      if (idx >= 0) {
-        all[idx] = {
-          ...all[idx],
+      if (reviewId) {
+        await reviewsApi.update(reviewId, {
           rating,
-          body,
-          createdAt: now,
-          movieTitle: finalTitle,
-        };
+          comment: contenido.trim(),
+        });
       } else {
-        all.push({
-          movieId: movieIdStr,
-          movieTitle: finalTitle,
+        await reviewsApi.create({
+          user_id: user.uid,
+          movie_id: movieIdNumber,
           rating,
-          body,
-          createdAt: now,
+          comment: contenido.trim(),
         });
       }
 
-      await AsyncStorage.setItem(REVIEWS_KEY, JSON.stringify(all));
       Alert.alert('Listo', 'Tu review se guardó correctamente.', [
         {
           text: 'OK',
           onPress: () => router.back(),
         },
       ]);
-    } catch (error) {
-      console.error('Error guardando review:', error);
+    } catch (e) {
+      console.error('Error guardando review:', e);
       Alert.alert('Error', 'No se pudo guardar la review. Intentá de nuevo.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const renderStars = () => (
     <View style={styles.starsRow}>
-      {Array.from({ length: 5 }).map((_, i) => {
-        const starIndex = i + 1;
-        const filled = starIndex <= rating;
-        return (
-          <TouchableOpacity key={i} onPress={() => setRating(starIndex)}>
-            <Ionicons
-              name={filled ? 'star' : 'star-outline'}
-              size={32}
-              color="#ffd700"
-            />
-          </TouchableOpacity>
-        );
-      })}
+      {[1, 2, 3, 4, 5].map((star: number) => (
+        <TouchableOpacity
+          key={star}
+          style={styles.starButton}
+          onPress={() => setRating(star)}
+        >
+          <Ionicons
+            name={star <= rating ? 'star' : 'star-outline'}
+            size={26}
+            color={star <= rating ? '#FFD700' : '#666'}
+          />
+        </TouchableOpacity>
+      ))}
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header general del cine */}
       <Header title={isEditing ? 'Editar review' : 'Dejar review'} />
 
-      {/* Botón volver */}
+      {/* Botón atrás flotante */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => router.back()}
@@ -144,25 +142,27 @@ const EscribirReview: React.FC = () => {
         <Ionicons name="arrow-back" size={26} color="white" />
       </TouchableOpacity>
 
-      <View style={{ marginTop: 70 }}>
-        <Text style={styles.movieTitle}>
-          {movieTitle ? movieTitle : 'Película'}
-        </Text>
+      <View style={styles.formContainer}>
+        <Text style={styles.movieTitle}>{movieTitle}</Text>
 
         <Text style={styles.label}>Puntuación</Text>
         {renderStars()}
 
-        <Text style={styles.label}>Tu opinión</Text>
+        <Text style={styles.label}>Contenido de la review</Text>
         <TextInput
           style={styles.input}
           placeholder="Escribí qué te pareció la película..."
           placeholderTextColor="#888"
           multiline
-          value={body}
-          onChangeText={setBody}
+          value={contenido}
+          onChangeText={setContenido}
         />
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+        <TouchableOpacity
+          style={styles.saveButton}
+          onPress={sendReview}
+          disabled={loading}
+        >
           <Text style={styles.saveButtonText}>
             {isEditing ? 'Guardar cambios' : 'Publicar review'}
           </Text>
@@ -173,27 +173,36 @@ const EscribirReview: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black', paddingHorizontal: 16 },
+  container: { flex: 1, backgroundColor: 'black' },
   backButton: { position: 'absolute', top: 65, left: 16, zIndex: 50 },
+  formContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 80,
+  },
   movieTitle: {
-    color: '#ddd',
+    color: '#ffffff',
     fontSize: 18,
-    marginBottom: 16,
+    fontWeight: 'bold',
     textAlign: 'center',
+    marginBottom: 16,
   },
   label: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 16,
     marginTop: 12,
     marginBottom: 6,
   },
   starsRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
+  },
+  starButton: {
+    padding: 4,
   },
   input: {
     marginTop: 4,
-    minHeight: 120,
+    minHeight: 130,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#444',
