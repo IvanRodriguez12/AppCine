@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "CineApp",
-    "slug": "CineApp",
+    "slug": "cineapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/icon.png",
@@ -54,6 +54,13 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1b30abd7-7ffa-4a10-bd28-4d273cac3b9a"
+      }
+    },
+    "owner": "lucianorodriguez"
   }
 }
